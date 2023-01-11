@@ -1,0 +1,42 @@
+version: "3.9"
+services:
+  zeek:
+    # image: zeek/zeek
+    build:
+      context: containers/zeek
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:6081:6081/udp"
+      - "127.0.0.1:4789:4789/udp"
+    networks:
+      - monitoring
+      - telemetry
+
+
+  prometheus:
+    build:
+      context: containers/prometheus
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:19090:9090"
+    networks:
+      - telemetry
+
+  grafana:
+    build:
+      context: containers/grafana
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:13000:3000"
+    networks:
+      - telemetry
+
+
+
+networks:
+  telemetry: {}
+  # Allow jumbo frames and name the bridge for monitoring.
+  monitoring:
+    driver_opts:
+      com.docker.network.driver.mtu: 9216
+      com.docker.network.bridge.name: br-zeekmon0
