@@ -84,15 +84,14 @@ through port 6081 and Zeek's filter set to ``udp port 6081``.
     a kernel bug (or missing functionality) in that dst_port is not respected
     for GENVE encapsulation.
 
-# Alternatives
+## capture-fwd
 
-Write a small Go program using gopacket to send vxlan/geneve encapsulated
-traffic to a given port. Might be useful for testing anyhow.
+A small gopacket based program is located in capture-fwd. This currently
+allows VXLAN encapsulation and then sending the packet to the IP where
+the sniffer is running.
 
-We could also use Corelight's [vxlan.py](https://github.com/corelight/container-monitoring/blob/main/monitoring/vxlan.py)
-script and send monitored traffic into the container using Python.
-Needs a bit of patching and isn't super efficient, but for a demo
-could work.
+There's also Corelight's [vxlan.py](https://github.com/corelight/container-monitoring/blob/main/monitoring/vxlan.py)
+that does something similar with Python.
 
 
 # Zeek setup

@@ -23,15 +23,30 @@ var destIpStr = flag.String("destIp", "127.0.0.1", "Destination IP")
 var destPortInt = flag.Int("destPort", 0, "Destination port")
 var vni = flag.Int("vni", 4242, "Virtual Network Identifier")
 var encap = flag.String("encap", "vxlan", "vxlan|geneve")
+var debug = flag.Bool("debug", false, "Enable debug")
 
 func srcPort(packet gopacket.Packet) int {
 
-	// TODO: Source port based on flow hash.
+	var net_hash uint64 = 0
+	var transport_hash uint64 = 0
 
-	return 51000
+	if net_layer := packet.NetworkLayer(); net_layer != nil {
+		net_flow := net_layer.NetworkFlow()
+		net_hash = net_flow.FastHash()
+	}
+	if transport_layer := packet.TransportLayer(); transport_layer != nil {
+		transport_flow := transport_layer.TransportFlow()
+		transport_hash = transport_flow.FastHash()
+	}
+
+	return int(1024 + (transport_hash+net_hash)%50000)
 }
 
 func sendUDP(la, ra *net.UDPAddr, data []byte) error {
+
+	// This may not be safe if someone is already listening
+	// on the UDP address. We probably should use raw sockets
+	// for sending out the packets instead...
 	conn, err := net.DialUDP("udp", la, ra)
 	if err != nil {
 		return err
@@ -114,14 +129,10 @@ func main() {
 		data := buf.Bytes()
 
 		laddr := net.UDPAddr{Port: srcPort(p)}
-		// fmt.Printf("Sending %d bytes from %+v to %+v (%+v)\n", len(data), laddr, raddr, p.TransportLayer())
-		// XXX: If we don't do time.sleep() here, there's packet drops
-		//      somewhere I'm not yet sure where they are dropped, but
-		//      Zeek reports missed_bytes or broken histories if we
-		//      don't sleep here.
-		//
-		//	Maybe we close the socket right away?
-		time.Sleep(1 * time.Millisecond)
+		if *debug {
+			fmt.Printf("Sending %d bytes from %+v to %+v\n", len(data), laddr, raddr)
+		}
+
 		if err := sendUDP(&laddr, &raddr, data); err != nil {
 			log.Fatal("Failed to send encap packet: ", err)
 		}
