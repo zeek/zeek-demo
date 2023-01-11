@@ -2,15 +2,22 @@
 
 A docker-compose to demo Zeek.
 
+For traffic replay, the idea is to replay GENEVE or VXLAN encapsulated
+traffic to 127.0.0.1 on the respective default port. docker-compose is
+setting up port forwarding so that the traffic reaches the Zeek process.
+
+In effect, Zeek sees the traffic the same as if it was running in an
+AWS traffic monitoring or the GWLB environment.
+
 Quick links:
 
     # Prometheus
     http://localhost:19090
 
-    # Grafana
+    # Grafana (default admin:admin credentials)
     http://localhost:13000
 
-    # VXLAN / Geneve ports forwarded to zeek container.
+    # VXLAN / Geneve ports forwarded into zeek container.
     127.0.0.1:4789/udp
     127.0.0.1:6081/udp
 
@@ -62,7 +69,7 @@ Also, increase the MTU of the vxlan0 device
     sudo ip link set vxlan0 mtu 9216
 
 
-## Geneve (not working with the tc tunnel_key action)
+## GENEVE (not working with the tc tunnel_key action)
 
 By default, the zeek service started by docker-compose is accessible
 through port 6081 and Zeek's filter set to ``udp port 6081``.
