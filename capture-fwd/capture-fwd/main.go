@@ -25,7 +25,7 @@ var vni = flag.Int("vni", 4242, "Virtual Network Identifier")
 var encap = flag.String("encap", "vxlan", "vxlan|geneve")
 var debug = flag.Bool("debug", false, "Enable debug")
 
-func srcPort(packet gopacket.Packet) int {
+func srcPort(packet gopacket.Packet) uint16 {
 
 	var net_hash uint64 = 0
 	var transport_hash uint64 = 0
@@ -39,15 +39,12 @@ func srcPort(packet gopacket.Packet) int {
 		transport_hash = transport_flow.FastHash()
 	}
 
-	return int(1024 + (transport_hash+net_hash)%50000)
+	return uint16(1024 + (transport_hash+net_hash)%50000)
 }
 
-func sendUDP(la, ra *net.UDPAddr, data []byte) error {
+func sendUDP(laddr, raddr *net.IPAddr, data []byte) error {
 
-	// This may not be safe if someone is already listening
-	// on the UDP address. We probably should use raw sockets
-	// for sending out the packets instead...
-	conn, err := net.DialUDP("udp", la, ra)
+	conn, err := net.DialIP("ip:udp", laddr, raddr)
 	if err != nil {
 		return err
 	}
@@ -105,35 +102,62 @@ func main() {
 	// Where are we sending stuff?
 	destIp := net.ParseIP(*destIpStr)
 
-	if *destPortInt == 0 {
-		if *encap == "vxlan" {
+	var encap_layer gopacket.SerializableLayer
+	if *encap == "vxlan" {
+		if *destPortInt == 0 {
 			*destPortInt = 4789
 		}
+		encap_layer = &layers.VXLAN{
+			ValidIDFlag: true,
+			VNI:         uint32(*vni),
+		}
+	} else if *encap == "geneve" {
+		if *destPortInt == 0 {
+			*destPortInt = 6081
+		}
+		encap_layer = &layers.Geneve{
+			Version: 0,
+			VNI:     uint32(*vni),
+			// XXX: Is this always right?
+			Protocol: layers.EthernetTypeTransparentEthernetBridging,
+		}
+
+	} else {
+		log.Fatal("Unknown encap: ", *encap)
 	}
 
-	raddr := net.UDPAddr{IP: destIp, Port: *destPortInt}
+	raddr := net.IPAddr{IP: destIp}
 
 	ps := gopacket.NewPacketSource(handle, handle.LinkType())
 
-	// Sniff the packets, encapsulate and then forward.
+	buf := gopacket.NewSerializeBuffer()
 	for p := range ps.Packets() {
-		buf := gopacket.NewSerializeBuffer()
-		opts := gopacket.SerializeOptions{}
-
-		gopacket.SerializeLayers(buf, opts,
-			&layers.VXLAN{
-				ValidIDFlag: true,
-				VNI:         uint32(*vni),
-			},
-			gopacket.Payload(p.Data()))
-		data := buf.Bytes()
-
-		laddr := net.UDPAddr{Port: srcPort(p)}
-		if *debug {
-			fmt.Printf("Sending %d bytes from %+v to %+v\n", len(data), laddr, raddr)
+		opts := gopacket.SerializeOptions{
+			FixLengths:       true,
+			ComputeChecksums: true,
 		}
 
-		if err := sendUDP(&laddr, &raddr, data); err != nil {
+		transport_layer := layers.UDP{
+			SrcPort:  layers.UDPPort(srcPort(p)),
+			DstPort:  layers.UDPPort(*destPortInt),
+			Checksum: 0, // 0 means ignored. We could do better if know the addresses
+		}
+
+		payload := gopacket.Payload(p.Data())
+
+		gopacket.SerializeLayers(buf, opts,
+			&transport_layer,
+			encap_layer,
+			payload,
+		)
+
+		data := buf.Bytes()
+
+		if *debug {
+			fmt.Printf("Sending %d bytes from %d to %v:%v\n", len(data), transport_layer.SrcPort, destIp, *destPortInt)
+		}
+
+		if err := sendUDP(nil, &raddr, data); err != nil {
 			log.Fatal("Failed to send encap packet: ", err)
 		}
 	}
