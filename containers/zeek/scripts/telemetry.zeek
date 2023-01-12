@@ -72,7 +72,9 @@ hook Telemetry::sync() {
     Telemetry::gauge_set(tunnels_active_footprint_gauge, val_footprint(Tunnel::active));
 }
 
-module GLOBAL;
+module Telemetry::DNS;
+
+# DNS questions / answers histograms
 
 global dns_qdcount_hf = Telemetry::register_histogram_family([
     $prefix="zeek",
@@ -93,8 +95,57 @@ global dns_ancount_hf = Telemetry::register_histogram_family([
 ]);
 
 
-# DNS questions histogram
 event dns_message(c: connection, is_orig: bool, msg: dns_msg, len: count) {
     Telemetry::histogram_family_observe(dns_qdcount_hf, vector(), msg$num_queries);
     Telemetry::histogram_family_observe(dns_ancount_hf, vector(), msg$num_answers);
+}
+
+
+# Network stats
+
+module Telemetry::Network;
+
+global bytes_received_cf = Telemetry::register_counter_family([
+    $prefix="zeek",
+    $name="bytes_received",
+    $unit="1",
+    $help_text="Number of bytes received",
+]);
+
+global packets_received_cf = Telemetry::register_counter_family([
+    $prefix="zeek",
+    $name="packets_received",
+    $unit="1",
+    $help_text="Number of packets received",
+]);
+
+global packets_dropped_cf = Telemetry::register_counter_family([
+    $prefix="zeek",
+    $name="packets_dropped",
+    $unit="1",
+    $help_text="Number of bytes received",
+]);
+
+hook Telemetry::sync() {
+    local net_stats = get_net_stats();
+    Telemetry::counter_family_set(bytes_received_cf, vector(), net_stats$bytes_recvd);
+    Telemetry::counter_family_set(packets_received_cf, vector(), net_stats$pkts_recvd);
+    Telemetry::counter_family_set(packets_dropped_cf, vector(), net_stats$pkts_dropped);
+}
+
+module Telemetry::Event;
+
+global event_handler_invoked_cf = Telemetry::register_counter_family([
+    $prefix="zeek",
+    $name="event_handler_invocations",
+    $unit="1",
+    $labels=vector("name"),
+    $help_text="Number of times the given event handler was invoked.",
+]);
+
+hook Telemetry::sync() {
+    local event_handler_stats = get_event_handler_stats();
+
+    for ( _, enc in event_handler_stats )
+        Telemetry::counter_family_set(event_handler_invoked_cf, vector(enc$name), enc$times_called);
 }
