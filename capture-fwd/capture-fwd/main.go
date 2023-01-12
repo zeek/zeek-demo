@@ -42,13 +42,7 @@ func srcPort(packet gopacket.Packet) uint16 {
 	return uint16(1024 + (transport_hash+net_hash)%50000)
 }
 
-func sendUDP(laddr, raddr *net.IPAddr, data []byte) error {
-
-	conn, err := net.DialIP("ip:udp", laddr, raddr)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
+func sendData(conn *net.IPConn, data []byte) error {
 
 	written, err := conn.Write(data)
 	if err != nil {
@@ -99,9 +93,6 @@ func main() {
 		}
 	}
 
-	// Where are we sending stuff?
-	destIp := net.ParseIP(*destIpStr)
-
 	var encap_layer gopacket.SerializableLayer
 	if *encap == "vxlan" {
 		if *destPortInt == 0 {
@@ -126,22 +117,41 @@ func main() {
 		log.Fatal("Unknown encap: ", *encap)
 	}
 
+	// Where are we sending stuff?
+	destIp := net.ParseIP(*destIpStr)
 	raddr := net.IPAddr{IP: destIp}
+	conn, err := net.DialIP("ip:udp", nil, &raddr)
+	if err != nil {
+		log.Fatal("DialIP error:", err)
+	}
+	defer conn.Close()
 
-	ps := gopacket.NewPacketSource(handle, handle.LinkType())
+	if *debug {
+		fmt.Printf("local=%v\n", conn.LocalAddr())
+	}
+
+	// Pseudo header required for checksum computation. This
+	// isn't serialized
+	pseudo_ip_layer := layers.IPv4{
+		SrcIP: net.ParseIP(conn.LocalAddr().String()),
+		DstIP: net.ParseIP(conn.RemoteAddr().String()),
+	}
 
 	buf := gopacket.NewSerializeBuffer()
+	opts := gopacket.SerializeOptions{
+		FixLengths:       true,
+		ComputeChecksums: true,
+	}
+
+	ps := gopacket.NewPacketSource(handle, handle.LinkType())
 	for p := range ps.Packets() {
-		opts := gopacket.SerializeOptions{
-			FixLengths:       true,
-			ComputeChecksums: true,
-		}
 
 		transport_layer := layers.UDP{
 			SrcPort:  layers.UDPPort(srcPort(p)),
 			DstPort:  layers.UDPPort(*destPortInt),
 			Checksum: 0, // 0 means ignored. We could do better if know the addresses
 		}
+		transport_layer.SetNetworkLayerForChecksum(&pseudo_ip_layer)
 
 		payload := gopacket.Payload(p.Data())
 
@@ -151,13 +161,11 @@ func main() {
 			payload,
 		)
 
-		data := buf.Bytes()
-
 		if *debug {
-			fmt.Printf("Sending %d bytes from %d to %v:%v\n", len(data), transport_layer.SrcPort, destIp, *destPortInt)
+			fmt.Printf("Sending %d bytes from %v:%d to %v:%v\n", len(buf.Bytes()), pseudo_ip_layer.SrcIP, transport_layer.SrcPort, destIp, *destPortInt)
 		}
 
-		if err := sendUDP(nil, &raddr, data); err != nil {
+		if err := sendData(conn, buf.Bytes()); err != nil {
 			log.Fatal("Failed to send encap packet: ", err)
 		}
 	}

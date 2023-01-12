@@ -106,3 +106,11 @@ TODO:
 * Use log policy to remove the VXLAN/GENEVE log entries if they
   don't have a tunnel.
 * Remove `tunnel_parent`, too?
+
+## Checksums oh my
+
+The interface within the zeek container has rx/tx checksum offloading
+enabled, meaning the packets seen via tcpdump within the container do
+not have correct checksums on the outer layer.
+
+Maybe the skip analyzer will help here, too.
