@@ -1,4 +1,4 @@
-FROM grafana/grafana:8.2.6
+FROM grafana/grafana:9.3.2
 
 COPY ./provisioning/datasources /etc/grafana/provisioning/datasources
 COPY ./provisioning/dashboards /etc/grafana/provisioning/dashboards

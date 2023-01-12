@@ -12,6 +12,7 @@ global log_writes_cf = Telemetry::register_counter_family([
 hook Log::log_stream_policy(rec: any, id: Log::ID)
     {
     local log_id = to_lower(gsub(cat(id), /:+/, "_"));
+    log_id = gsub(log_id, /_log$/, "");
     Telemetry::counter_family_inc(log_writes_cf, vector(log_id));
     }
 
@@ -69,4 +70,31 @@ hook Telemetry::sync() {
 
     Telemetry::gauge_set(tunnels_active_size_gauge, |Tunnel::active|);
     Telemetry::gauge_set(tunnels_active_footprint_gauge, val_footprint(Tunnel::active));
+}
+
+module GLOBAL;
+
+global dns_qdcount_hf = Telemetry::register_histogram_family([
+    $prefix="zeek",
+    $name="dns_qdcount",
+    $unit="1",
+    $help_text="DNS query count distribution",
+    $is_total=T,
+    $bounds=vector(1.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0),
+]);
+
+global dns_ancount_hf = Telemetry::register_histogram_family([
+    $prefix="zeek",
+    $name="dns_ancount",
+    $unit="1",
+    $help_text="DNS answer count distribution",
+    $is_total=T,
+    $bounds=vector(1.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0),
+]);
+
+
+# DNS questions histogram
+event dns_message(c: connection, is_orig: bool, msg: dns_msg, len: count) {
+    Telemetry::histogram_family_observe(dns_qdcount_hf, vector(), msg$num_queries);
+    Telemetry::histogram_family_observe(dns_ancount_hf, vector(), msg$num_answers);
 }
