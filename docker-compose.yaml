@@ -17,7 +17,7 @@ services:
       context: containers/loki
       dockerfile: Dockerfile
     ports:
-      - "127.0.0.1:3100:13100"
+      - "127.0.0.1:13100:3100"
     networks:
       - telemetry
 
