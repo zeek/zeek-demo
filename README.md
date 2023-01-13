@@ -14,7 +14,7 @@ Quick links:
     # Prometheus
     http://localhost:19090
 
-    # Grafana (default admin:admin credentials)
+    # Grafana (default zeek:zeek credentials)
     http://localhost:13000
 
     # VXLAN / Geneve ports forwarded into zeek container.
