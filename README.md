@@ -1,22 +1,22 @@
 # Zeek-demo
 
-A docker-compose setup to demo Zeek.
+A docker-compose setup to demo [Zeek](https://github.com/zeek/zeek).
 
-This setup is plumbing together the upstream Zeek container image with
-[Prometheus](https://prometheus.io/), [Loki](https://grafana.com/oss/loki/)
+This setup is plumbing together the [official zeek/zeek-dev container image](https://hub.docker.com/r/zeek/zeek-dev)
+with [Prometheus](https://prometheus.io/), [Loki](https://grafana.com/oss/loki/)
 and [Grafana](https://grafana.com/grafana/).
 
 Dashboards for [Zeek logs](https://docs.zeek.org/en/master/logs/index.html)
 and Zeek metrics from the [telemetry framework](https://docs.zeek.org/en/master/frameworks/telemetry.html) are available in the Grafana instance by default.
 
-For traffic replay, the idea is to replay GENEVE or VXLAN encapsulated
-traffic towards 127.0.0.1 on the respective default port for these
-tunnel protocols. docker-compose is setting up port forwarding so that the
+For traffic replay, the idea is to send [GENEVE](https://www.rfc-editor.org/rfc/rfc8926.html)
+or [VXLAN](https://www.rfc-editor.org/rfc/rfc7348.html) encapsulated traffic
+towards 127.0.0.1 on the respective default port for these tunnel protocols.
+The docker-compose configuration is setting up port forwarding such that the
 traffic reaches the Zeek process.
 
-In effect, Zeek sees the traffic the same as if it was running in an
-[AWS traffic monitoring](https://docs.aws.amazon.com/vpc/latest/mirroring/traffic-mirroring-packet-formats.html)
- or the AWS GWLB environment.
+In effect, when using VXLAN encapsulation, Zeek observes the traffic the same
+as if it were deployed in an [AWS traffic monitoring](https://docs.aws.amazon.com/vpc/latest/mirroring/traffic-mirroring-packet-formats.html) environment.
 
 ## Running
 
@@ -45,12 +45,15 @@ the host system.
     127.0.0.1:6081/udp
 
 
-# Sending Mirror Traffic
+## Sending Mirror Traffic
 
-From easiest to more exotic. As mentioned above, essentially sending
+From easiest to rather exotic. As mentioned above, essentially sending
 VXLAN or GENEVE encapsulated mirror traffic towards the container.
 
-## capture-fwd
+See the section about [host configuration](#advanced-host-configuration)
+for a few tuning suggestions that can not happen within the container.
+
+### capture-fwd
 
 A small [gopacket](https://github.com/google/gopacket) based program is located
 in the capture-fwd directory. This currently supports VXLAN or GENVE
@@ -71,14 +74,17 @@ that does something similar in Python, but is quite specific to a setup within
 Kubernetes.
 
 
-## Kernel based VXLAN
+### Kernel based VXLAN
 
 The following works with a kernel vxlan device natively:
- * Configure a vxlan0 device that is externally managed with a default port that's different than 4789
- * Setup a [tunnel_key set](https://man7.org/linux/man-pages/man8/tc-tunnel_key.8.html)
+
+* Configure a vxlan0 device that is externally managed with a default port that's different than 4789
+* Setup a [tunnel_key set](https://man7.org/linux/man-pages/man8/tc-tunnel_key.8.html)
 
     sudo ip link add vxlan0 type vxlan dstport 14789 external
     sudo ip link set vxlan0 up
+    sudo ip link set vxlan0 mtu 9216
+
     sudo tc qdisc add dev vxlan0 root handle 1: prio
     sudo tc filter add dev vxlan0 protocol ip parent 1: \
        matchall \
@@ -101,19 +107,6 @@ the container.
     tc filter add dev wlp0s20f3 parent 1: matchall action mirred egress mirror dev vxlan0
     tc filter add dev wlp0s20f3 parent ffff: matchall action mirred egress mirror dev vxlan0
 
-### MTU
-
-What seems important here is a larger MTU for the docker bridge, otherwise
-we see messages. See docker-compose.yaml.
-
-    11:28:37.022033 IP 172.24.0.1.41955 > 172.24.0.2.4789: VXLAN, flags [I] (0x08), vni 42424
-    IP truncated-ip - 10 bytes missing! 139.178.84.217.443 > 192.168.0.107.58922: Flags [.], seq 6082:7490, ack 747, win 118, options [nop,nop,TS val 1704108423 ecr 2103894686], length 1408
-    11:28:37.022200 IP 172.24.0.1.41955 > 172.24.0.2.4789: VXLAN, flags [I] (0x08), vni 42424
-    IP truncated-ip - 10 bytes missing! 139.178.84.217.443 > 192.168.0.107.58922: Flags [.], seq 7490:8898, ack 747, win 118, options [nop,nop,TS val 1704108423 ecr 2103894686], length 1408
-
-Also, increase the MTU of the vxlan0 device
-
-    sudo ip link set vxlan0 mtu 9216
 
 
 ## Kernel based GENEVE (not working with the tc tunnel_key action)
@@ -132,7 +125,7 @@ through port 6081 and Zeek's filter set to ``udp port 6081``.
     for GENVE encapsulation.
 
 
-# Advanced Host Configuration
+## Advanced Host Configuration
 
 When using the `capture-fwd` provided in this repository to monitor a local
 network interface, that interface should have offloading features disabled:
