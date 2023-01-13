@@ -12,6 +12,14 @@ services:
       - monitoring
       - telemetry
 
+  loki:
+    build:
+      context: containers/loki
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:3100:13100"
+    networks:
+      - telemetry
 
   prometheus:
     build:
