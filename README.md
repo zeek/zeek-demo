@@ -1,30 +1,77 @@
 # Zeek-demo
 
-A docker-compose to demo Zeek.
+A docker-compose setup to demo Zeek.
+
+This setup is plumbing together the upstream Zeek container image with
+[Prometheus](https://prometheus.io/), [Loki](https://grafana.com/oss/loki/)
+and [Grafana](https://grafana.com/grafana/).
+
+Dashboards for [Zeek logs](https://docs.zeek.org/en/master/logs/index.html)
+and Zeek metrics from the [telemetry framework](https://docs.zeek.org/en/master/frameworks/telemetry.html) are available in the Grafana instance by default.
 
 For traffic replay, the idea is to replay GENEVE or VXLAN encapsulated
-traffic to 127.0.0.1 on the respective default port. docker-compose is
-setting up port forwarding so that the traffic reaches the Zeek process.
+traffic towards 127.0.0.1 on the respective default port for these
+tunnel protocols. docker-compose is setting up port forwarding so that the
+traffic reaches the Zeek process.
 
 In effect, Zeek sees the traffic the same as if it was running in an
-AWS traffic monitoring or the GWLB environment.
+[AWS traffic monitoring](https://docs.aws.amazon.com/vpc/latest/mirroring/traffic-mirroring-packet-formats.html)
+ or the AWS GWLB environment.
 
-Quick links:
+## Running
+
+Clone the repository and run docker-compose up.
+
+    $ git clone https://github.com/zeek/zeek-demo
+    $ cd zeek-demo
+    $ docker-compose up
+
+## Quick links
+
+After starting running `up`, the following links should be reachable on
+the host system.
+
+    # Grafana (zeek:zeek as credentials)
+    http://localhost:13000
+
+    # Loki
+    http://localhost:13100
 
     # Prometheus
     http://localhost:19090
-
-    # Grafana (default zeek:zeek credentials)
-    http://localhost:13000
 
     # VXLAN / Geneve ports forwarded into zeek container.
     127.0.0.1:4789/udp
     127.0.0.1:6081/udp
 
 
-# Mirror VXLAN encapsulated traffic into container
+# Sending Mirror Traffic
 
-## VXLAN
+From easiest to more exotic. As mentioned above, essentially sending
+VXLAN or GENEVE encapsulated mirror traffic towards the container.
+
+## capture-fwd
+
+A small [gopacket](https://github.com/google/gopacket) based program is located
+in the capture-fwd directory. This currently supports VXLAN or GENVE
+encapsulation sending the packet a destination IP (default 127.0.0.1).
+
+    $ cd capture-fwd
+    $ go build
+
+    $ sudo ./capture-fwd -i $INTERFACE -encap vxlan -destIp 127.0.0.1 'ip or ip6'
+
+Alternatively, it can read a pcap file and forward its content:
+
+    $ sudo ./capture-fwd -r /path/to/traffic.pcap -encap vxlan -destIp 127.0.0.1 'ip or ip6'
+
+
+There's also Corelight's [vxlan.py](https://github.com/corelight/container-monitoring/blob/main/monitoring/vxlan.py)
+that does something similar in Python, but is quite specific to a setup within
+Kubernetes.
+
+
+## Kernel based VXLAN
 
 The following works with a kernel vxlan device natively:
  * Configure a vxlan0 device that is externally managed with a default port that's different than 4789
@@ -69,7 +116,7 @@ Also, increase the MTU of the vxlan0 device
     sudo ip link set vxlan0 mtu 9216
 
 
-## GENEVE (not working with the tc tunnel_key action)
+## Kernel based GENEVE (not working with the tc tunnel_key action)
 
 By default, the zeek service started by docker-compose is accessible
 through port 6081 and Zeek's filter set to ``udp port 6081``.
@@ -84,33 +131,38 @@ through port 6081 and Zeek's filter set to ``udp port 6081``.
     a kernel bug (or missing functionality) in that dst_port is not respected
     for GENVE encapsulation.
 
-## capture-fwd
 
-A small gopacket based program is located in capture-fwd. This currently
-allows VXLAN encapsulation and then sending the packet to the IP where
-the sniffer is running.
+# Advanced Host Configuration
 
-There's also Corelight's [vxlan.py](https://github.com/corelight/container-monitoring/blob/main/monitoring/vxlan.py)
-that does something similar with Python.
+When using the `capture-fwd` provided in this repository to monitor a local
+network interface, that interface should have offloading features disabled:
 
+    sudo ethtool -K $INTERFACE gro off gso off tso off rx-gro-hw off
 
-# Zeek setup
+Further, due to how traffic is sent into the container via individual UDP
+packets with a docker-proxy process between), it is advisable to increase
+the default socket buffer sizes to avoid causing send/receive buffer errors:
 
-On the Zeek side, we're receiving VXLAN (or GENEVE) encapsulated traffic
-this way.
+    sudo sysctl -w net.core.rmem_max=26214400
+    sudo sysctl -w net.core.rmem_default=26214400
+    sudo sysctl -w net.core.wmem_max=26214400
+    sudo sysctl -w net.core.wmem_default=26214400
 
-* Use a BPF filter to only select 4789 and 6081 traffic.
+For persisting these values across reboots, set them in sysctl.conf.
 
-TODO:
-* Possibly use the skip analyzer to jump over the encapsulation.
-* Use log policy to remove the VXLAN/GENEVE log entries if they
-  don't have a tunnel.
-* Remove `tunnel_parent`, too?
+Verify that the send and receive buffer error metrics are not increasing
+in the following netstat output while running `capture-fwd`
 
-## Checksums oh my
+    $ netstat --stat --udp
+    ...
+    Udp:
+        65749361 packets received
+        3426141 packets to unknown port received
+        4395289 packet receive errors
+        66934818 packets sent
+        4394245 receive buffer errors
+        161 send buffer errors
+        InCsumErrors: 1044
+        IgnoredMulti: 14
 
-The interface within the zeek container has rx/tx checksum offloading
-enabled, meaning the packets seen via tcpdump within the container do
-not have correct checksums on the outer layer.
-
-Maybe the skip analyzer will help here, too.
+Also, verify `capture-fwd` is able to collect and forward packets fast enough.
