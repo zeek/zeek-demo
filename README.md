@@ -154,7 +154,11 @@ fix appears running with `taskset` to pin `capture-fwd` to a single CPU:
 Alternatively, there's a `-delay` flag for delaying sending of packets.
 When using `-r` to read from a pcap.
 
-### Enable Receive Packet Steering (RPS) on the loopback interface
+### Enable Receive Packet Steering (RPS)
+
+Unfortunately, this needs to be done on the host loopback interface *and*
+inside the container. For the latter, I haven't found a way to do it
+without privileged, yet.
 
 For an 8 CPU system, set the following CPU mask in the for `rps_cpus`:
 
