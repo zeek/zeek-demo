@@ -157,18 +157,32 @@ When using `-r` to read from a pcap.
 ### Enable Receive Packet Steering (RPS)
 
 Unfortunately, this needs to be done on the host loopback interface *and*
-inside the container. For the latter, I haven't found a way to do it
-without privileged, yet.
+inside the container. For the latter, we need to play tricks if we want
+to continue running the zeek container in unprivileged mode.
 
 For an 8 CPU system, set the following CPU mask in the for `rps_cpus`:
 
-    $ echo "ff" > /sys/devices/virtual/net/lo/queues/rx-0/rps_cpus
+    $ echo ff > /sys/devices/virtual/net/lo/queues/rx-0/rps_cpus
 
 This will choose a CPU for packet handling based on on the flow hash
 rather than the CPU on which `capture-fwd` is running.
 
+For eth0 within the container, use nsenter on the host system to
+enter the mount and network namespace of the container, then set
+`rps_cpu` of `eth0`:
+
+    $ TARGET_PID=$(pgrep -f '^/udp-dropper 4789$')
+    $ sudo nsenter -m -n -t $TARGET_PID
+    $ mount -o remount,rw /sys
+    $ echo ff > /sys/devices/virtual/net/eth0/queues/rx-0/rps_cpus
+    $ mount -o remount,ro /sys
+    # Ctrl+D to exit
+
+In a Docker container, sysfs is mounted read-only when running unprivileged.
+To change the setting, we temporarily mount as `rw` and reset it afterwards.
+
 It can also make sense to increase the `netdev_max_backlog` value to avoid
-softnet drops:
+softnet drops (see the Monitoring for Packet Drops section).
 
     $ sysctl -w net.core.netdev_max_backlog=10000
 
