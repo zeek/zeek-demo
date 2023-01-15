@@ -109,21 +109,21 @@ global bytes_received_cf = Telemetry::register_counter_family([
     $prefix="zeek",
     $name="bytes_received",
     $unit="1",
-    $help_text="Number of bytes received",
+    $help_text="Total number of bytes received",
 ]);
 
 global packets_received_cf = Telemetry::register_counter_family([
     $prefix="zeek",
     $name="packets_received",
     $unit="1",
-    $help_text="Number of packets received",
+    $help_text="Total number of packets received",
 ]);
 
 global packets_dropped_cf = Telemetry::register_counter_family([
     $prefix="zeek",
     $name="packets_dropped",
     $unit="1",
-    $help_text="Number of bytes received",
+    $help_text="Total number of packets dropped",
 ]);
 
 hook Telemetry::sync() {
