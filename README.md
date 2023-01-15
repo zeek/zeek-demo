@@ -159,3 +159,56 @@ in the following netstat output while running `capture-fwd`
         IgnoredMulti: 14
 
 Also, verify `capture-fwd` is able to collect and forward packets fast enough.
+
+## Packet Reordering
+
+It appears, *cough*, that [UDP packet reordering over lo](https://lore.kernel.org/netdev/e0f9fb60-b09c-30ad-0670-aa77cc3b2e12@gmail.com/)
+is a thing on Linux due to [scaling techniques](https://www.kernel.org/doc/Documentation/networking/scaling.rst)
+employed for the loopback interface.
+
+In the Zeek logs, this manifests as `missed_bytes` in the `conn.log`, while
+the number of originator and responder packets is the same as if the involved
+pcap (when using `capture-fwd -r`) was fed into Zeek directly using `zeek -r`.
+Further, the history shows gaps (gG) for such connections. This is, unfortunately,
+a bit misleading as it's really out-of-order packets rather than gaps.
+
+The following approaches have been found as ways to alleviate this:
+
+### CPU Pinning capture-fwd to a single CPU with taskset
+
+Running `capture-fwd` at high packet rates sending to the default
+loopback address may be affected. The most straightforward and effective
+fix appears running with `taskset` to pin `capture-fwd` to a single CPU:
+
+    $ taskset -c 1 ./capture-fwd ./1mio-packets.pcap
+    $ taskset -c 1 ./capture-fwd -i $INTERFACE
+
+Alternatively, there's a `-delay` flag for delaying sending of packets.
+When using `-r` to read from a pcap, this defaults to 1usec.
+
+### Sending packets directly to the Zeek container IP
+
+Sending directly to the container IP rather than through the `docker-proxy`
+listening on the the loopback interface also improves the reordering issue
+as well. Concretely, fetch the IP of the zeek container, then pass
+it to `capture-fwd`
+
+    $ IP=$(docker-compose exec zeek ip addr show eth0 | sed -n 's,.*inet \([^/]*\)/.*$,\1,p')
+    $ echo $P
+    172.24.0.2
+    $ ./capture-fwd -delay 0us -destIp $IP -destPort 4789 -r ./1mio-packets.pcap
+
+A nice side-effect of this is that it removes the `docker-proxy`
+that's using up quite a bit of CPU time.
+
+### Running capture-fwd in system.slice
+
+Putting the `capture-fwd` process into the `system.slice` cgroup whereo
+`docker.service` and the `docker-proxy` process live removes the packet
+reordering issue during replay at least on my system without `taskset` and
+using the loopback inteface:
+
+    $ systemd-run -t --same-dir --wait --system \
+        bash -c 'while true ; do ./capture-fwd -delay 0us -r ./1mio-packets.pcap  ; echo "$(date) replayed" ; done'
+
+Not sure why this is..

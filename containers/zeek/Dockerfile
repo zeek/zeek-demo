@@ -1,3 +1,12 @@
+FROM zeek/zeek-dev as build
+
+RUN apt-get update && apt-get install --no-install-recommends -y gcc make libc6-dev
+
+WORKDIR /build
+COPY udp-dropper ./
+RUN make
+
+
 FROM zeek/zeek-dev
 
 RUN apt-get update && apt-get install --no-install-recommends -y \
@@ -8,7 +17,6 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     jq \
     ncat \
     procps \
-    socat \
     tcpdump
 
 
@@ -29,6 +37,8 @@ COPY etc/promtail/config.yml .
 WORKDIR /
 COPY entrypoint.sh .
 RUN chmod +x ./entrypoint.sh
+
+COPY --from=build /build/udp-dropper /udp-dropper
 
 RUN mv /usr/local/zeek/share/zeek/site/local.zeek /usr/local/zeek/share/zeek/site/local.zeek.orig
 COPY local.zeek /usr/local/zeek/share/zeek/site/local.zeek

@@ -24,6 +24,7 @@ var destPortInt = flag.Int("destPort", 0, "Destination port")
 var vni = flag.Int("vni", 4242, "Virtual Network Identifier")
 var encap = flag.String("encap", "vxlan", "vxlan|geneve")
 var debug = flag.Bool("debug", false, "Enable debug")
+var pktDelay = flag.Duration("delay", 0, "Delay between packets when reading from a pcap. Increase this if you see UDP drops")
 
 func srcPort(packet gopacket.Packet) uint16 {
 
@@ -167,6 +168,10 @@ func main() {
 
 		if err := sendData(conn, buf.Bytes()); err != nil {
 			log.Fatal("Failed to send encap packet: ", err)
+		}
+
+		if *pktDelay > 0 {
+			time.Sleep(*pktDelay)
 		}
 	}
 }

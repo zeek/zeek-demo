@@ -3,10 +3,9 @@ set -eux
 
 # Listen on UDP 4789 and UDP 6081 so that the container does
 # not send out ICMP port unreachable responses for incoming
-# mirrored traffic. We can probably have this cheaper with
-# a custom daemon, but hey, this does it for now.
-socat udp-recv:4789 /dev/null,ignoreeof &
-socat udp-recv:6081 /dev/null,ignoreeof &
+# mirrored traffic. Drop the packets in user-space.
+/udp-dropper 4789 &
+/udp-dropper 6081 &
 
 # promtail startup
 promtail -config.file /etc/promtail/config.yml &
