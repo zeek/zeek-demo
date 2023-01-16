@@ -47,8 +47,8 @@ the host system.
 
 ## Sending Mirror Traffic
 
-From easiest to rather exotic. As mentioned above, essentially sending
-VXLAN or GENEVE encapsulated mirror traffic towards the container.
+The following instructions describe sending VXLAN encapsulated traffic
+towards the container.
 
 See the section about [host configuration](#advanced-host-configuration)
 for a few tuning suggestions that can not happen within the container.
@@ -59,7 +59,7 @@ A small [gopacket](https://github.com/google/gopacket) based program is located
 in the capture-fwd directory. This currently supports VXLAN or GENVE
 encapsulation sending the packet a destination IP (default 127.0.0.1).
 
-    $ cd capture-fwd
+    $ cd capture-fwd/capture-fwd
     $ go build
 
     $ sudo ./capture-fwd -i $INTERFACE -encap vxlan -destIp 127.0.0.1 'ip or ip6'
@@ -69,13 +69,17 @@ towards the container (or any other monitoring setup):
 
     $ sudo ./capture-fwd -r /path/to/traffic.pcap -encap vxlan -destIp 127.0.0.1
 
+#### Mac OSX with colima
 
-There's also Corelight's [vxlan.py](https://github.com/corelight/container-monitoring/blob/main/monitoring/vxlan.py)
-that does something similar in Python, but is quite specific to a setup within
-Kubernetes.
+On Mac OSX when using colima as a replacement for Docker Desktop, UDP port
+forwarding is [not functional](https://github.com/lima-vm/lima/issues/366).
+As [workaround](https://github.com/rancher-sandbox/rancher-desktop/issues/1611#issuecomment-1176491158),
+it is possible to add a route to the zeek container network via the VM to
+the host side and use the zeek container IP directly as `-destIP` parameter.
 
 
-### Kernel based VXLAN
+
+### Linux VXLAN Device
 
 The following works with the Linux vxlan device natively:
 
@@ -132,7 +136,7 @@ For persisting these values across reboots, set them in sysctl.conf.
 
 It appears, *cough*, that [UDP packet reordering over lo](https://lore.kernel.org/netdev/e0f9fb60-b09c-30ad-0670-aa77cc3b2e12@gmail.com/)
 is a thing on Linux due to [scaling techniques](https://www.kernel.org/doc/Documentation/networking/scaling.rst)
-employed for the loopback interface.
+employed for the loopback and veth interfaces.
 
 In the Zeek logs, this manifests as `missed_bytes` in the `conn.log`, while
 the number of originator and responder packets is the same as if the involved
@@ -167,9 +171,9 @@ For an 8 CPU system, set the following CPU mask in the for `rps_cpus`:
 This will choose a CPU for packet handling based on on the flow hash
 rather than the CPU on which `capture-fwd` is running.
 
-For eth0 within the container, use nsenter on the host system to
+For eth0 within the container, use `nsenter` on the host system to
 enter the mount and network namespace of the container, then set
-`rps_cpu` of `eth0`:
+`rps_cpu` of `eth0` after remounting `/sys` read-write.
 
     $ TARGET_PID=$(pgrep -f '^/udp-dropper 4789$')
     $ sudo nsenter -m -n -t $TARGET_PID
@@ -202,7 +206,7 @@ that's using up quite a bit of CPU time.
 
 ### Running capture-fwd in system.slice
 
-Putting the `capture-fwd` process into the `system.slice` cgroup whereo
+Putting the `capture-fwd` process into the `system.slice` cgroup where
 `docker.service` and the `docker-proxy` process live removes the packet
 reordering issue during replay at least on my system without `taskset` and
 using the loopback inteface:
