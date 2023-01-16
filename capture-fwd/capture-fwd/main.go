@@ -1,3 +1,13 @@
+// Capture-replay-forward utility
+//
+// Encapsulates network packets sniffed from a local network interface (-i)
+// or read from a pcap (-r) with VXLAN or GENEVE. Then either forward them
+// via UDP to destIp:destPort or write the packets encapsulated into a
+// pcap file (-w).
+//
+// For sending UDP packets and sniffing from interfaces, NET_CAP_RAW
+// is required on Linux.
+//
 // Based on https://github.com/google/gopacket/blob/master/dumpcommand/tcpdump.go
 package main
 
@@ -13,19 +23,25 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
+	"github.com/google/gopacket/pcapgo"
 )
 
-var iface = flag.String("i", "eth0", "Interface to read packets from")
+var iface = flag.String("i", "", "Interface to read packets from")
 var fname = flag.String("r", "", "Filename to read from, overrides -i")
+var wfname = flag.String("w", "", "Filename to write pcap to, overrides -destIp and -destPort")
 var snaplen = flag.Int("s", 65536, "Snap length (number of bytes max to read per packet")
 var promisc = flag.Bool("promisc", true, "Set promiscuous mode")
 var destIpStr = flag.String("destIp", "127.0.0.1", "Destination IP")
-var destPortInt = flag.Int("destPort", 0, "Destination port")
+var srcIpStr = flag.String("srcIp", "127.0.0.1", "Source IP when writing to pcap file")
+var srcMacStr = flag.String("srcMac", "0C:55:21:83:13:6D", "Source MAC address when writing to pcap file")
+var destMacStr = flag.String("destMac", "0C:55:21:83:13:6E", "Destination MAC when writing to pcap file")
+var destPortInt = flag.Int("destPort", 0, "Destination port. 4789 for VXLAN, 6081 for GENEVE")
 var vni = flag.Int("vni", 4242, "Virtual Network Identifier")
 var encap = flag.String("encap", "vxlan", "vxlan|geneve")
 var debug = flag.Bool("debug", false, "Enable debug")
-var pktDelay = flag.Duration("delay", 0, "Delay between packets when reading from a pcap. Increase this if you see UDP drops")
+var pktDelay = flag.Duration("delay", 0, "Delay after sending a packet.")
 
+// Inner flow-hashing to determine UDP source port.
 func srcPort(packet gopacket.Packet) uint16 {
 
 	var net_hash uint64 = 0
@@ -43,9 +59,18 @@ func srcPort(packet gopacket.Packet) uint16 {
 	return uint16(1024 + (transport_hash+net_hash)%50000)
 }
 
-func sendData(conn *net.IPConn, data []byte) error {
+type PacketOutputter interface {
+	// Output buf to a destination using opts. The original packet can be found in p
+	Output(p gopacket.Packet, opts gopacket.SerializeOptions, buf gopacket.SerializeBuffer) error
+}
 
-	written, err := conn.Write(data)
+type UdpOutputter struct {
+	conn *net.IPConn
+}
+
+func (o UdpOutputter) Output(p gopacket.Packet, opts gopacket.SerializeOptions, buf gopacket.SerializeBuffer) error {
+	data := buf.Bytes()
+	written, err := o.conn.Write(data)
 	if err != nil {
 		return err
 	}
@@ -56,6 +81,29 @@ func sendData(conn *net.IPConn, data []byte) error {
 	return nil
 }
 
+type PcapOutputter struct {
+	outer_layers []gopacket.SerializableLayer
+	writer       *pcapgo.Writer
+}
+
+func (o PcapOutputter) Output(p gopacket.Packet, opts gopacket.SerializeOptions, buf gopacket.SerializeBuffer) (err error) {
+
+	// Prepend the provided outer layers
+	for i := len(o.outer_layers) - 1; i >= 0; i-- {
+		if err = o.outer_layers[i].SerializeTo(buf, opts); err != nil {
+			return err
+		}
+	}
+
+	data := buf.Bytes()
+	info := gopacket.CaptureInfo{
+		Timestamp:     p.Metadata().Timestamp,
+		CaptureLength: len(data),
+		Length:        len(data),
+	}
+	return o.writer.WritePacket(info, data)
+}
+
 func main() {
 	flag.Parse()
 	var handle *pcap.Handle
@@ -64,7 +112,7 @@ func main() {
 		if handle, err = pcap.OpenOffline(*fname); err != nil {
 			log.Fatal("PCAP OpenOffline error:", err)
 		}
-	} else {
+	} else if *iface != "" {
 		// This is a little complicated because we want to allow all possible options
 		// for creating the packet capture handle... instead of all this you can
 		// just call pcap.OpenLive if you want a simple handle.
@@ -85,7 +133,10 @@ func main() {
 			log.Fatal("PCAP Activate error:", err)
 		}
 		defer handle.Close()
+	} else {
+		log.Fatal("Neither -i nor -r used")
 	}
+
 	if len(flag.Args()) > 0 {
 		bpffilter := strings.Join(flag.Args(), " ")
 		fmt.Fprintf(os.Stderr, "Using BPF filter %q\n", bpffilter)
@@ -113,29 +164,71 @@ func main() {
 			// XXX: Is this always right?
 			Protocol: layers.EthernetTypeTransparentEthernetBridging,
 		}
-
 	} else {
 		log.Fatal("Unknown encap: ", *encap)
 	}
 
-	// Where are we sending stuff?
+	var outputter PacketOutputter
+	var ip_layer layers.IPv4 // Fixme IPv6 support?
 	destIp := net.ParseIP(*destIpStr)
-	raddr := net.IPAddr{IP: destIp}
-	conn, err := net.DialIP("ip:udp", nil, &raddr)
-	if err != nil {
-		log.Fatal("DialIP error:", err)
-	}
-	defer conn.Close()
 
-	if *debug {
-		fmt.Printf("local=%v\n", conn.LocalAddr())
-	}
+	if *wfname != "" {
+		srcMac, err := net.ParseMAC(*srcMacStr)
+		if err != nil {
+			log.Fatal("Bad srcMac", err)
+		}
+		destMac, err := net.ParseMAC(*destMacStr)
+		if err != nil {
+			log.Fatal("Bad destMac", err)
+		}
 
-	// Pseudo header required for checksum computation. This
-	// isn't serialized
-	pseudo_ip_layer := layers.IPv4{
-		SrcIP: net.ParseIP(conn.LocalAddr().String()),
-		DstIP: net.ParseIP(conn.RemoteAddr().String()),
+		eth_type := layers.EthernetTypeIPv4
+		eth_layer := layers.Ethernet{
+			SrcMAC:       srcMac,
+			DstMAC:       destMac,
+			EthernetType: eth_type,
+		}
+		// When writing to a pcap, need to provide an explicit srcIp
+		ip_layer = layers.IPv4{
+			Version:  4,
+			SrcIP:    net.ParseIP(*srcIpStr),
+			DstIP:    destIp,
+			TTL:      32,
+			Protocol: layers.IPProtocolUDP,
+		}
+
+		f, err := os.Create(*wfname)
+		if err != nil {
+			log.Fatal("Failed to open pcap for writing:", err)
+		}
+		defer f.Close()
+
+		w := pcapgo.NewWriter(f)
+		w.WriteFileHeader(65536, layers.LinkTypeEthernet) // new file, must do this.
+
+		outputter = PcapOutputter{
+			outer_layers: []gopacket.SerializableLayer{&eth_layer, &ip_layer},
+			writer:       w,
+		}
+
+	} else {
+		raddr := net.IPAddr{IP: destIp}
+		conn, err := net.DialIP("ip:udp", nil, &raddr)
+		if err != nil {
+			log.Fatal("DialIP error:", err)
+		}
+		defer conn.Close()
+
+		if *debug {
+			fmt.Printf("Source address for UDP packets: %v\n", conn.LocalAddr())
+		}
+
+		ip_layer = layers.IPv4{
+			SrcIP: net.ParseIP(conn.LocalAddr().String()),
+			DstIP: net.ParseIP(conn.RemoteAddr().String()),
+		}
+
+		outputter = UdpOutputter{conn: conn}
 	}
 
 	buf := gopacket.NewSerializeBuffer()
@@ -148,11 +241,10 @@ func main() {
 	for p := range ps.Packets() {
 
 		transport_layer := layers.UDP{
-			SrcPort:  layers.UDPPort(srcPort(p)),
-			DstPort:  layers.UDPPort(*destPortInt),
-			Checksum: 0, // 0 means ignored. We could do better if know the addresses
+			SrcPort: layers.UDPPort(srcPort(p)),
+			DstPort: layers.UDPPort(*destPortInt),
 		}
-		transport_layer.SetNetworkLayerForChecksum(&pseudo_ip_layer)
+		transport_layer.SetNetworkLayerForChecksum(&ip_layer)
 
 		payload := gopacket.Payload(p.Data())
 
@@ -163,11 +255,11 @@ func main() {
 		)
 
 		if *debug {
-			fmt.Printf("Sending %d bytes from %v:%d to %v:%v\n", len(buf.Bytes()), pseudo_ip_layer.SrcIP, transport_layer.SrcPort, destIp, *destPortInt)
+			fmt.Printf("Outputting %d bytes from %v:%d to %v:%v\n", len(buf.Bytes()), ip_layer.SrcIP, transport_layer.SrcPort, destIp, *destPortInt)
 		}
 
-		if err := sendData(conn, buf.Bytes()); err != nil {
-			log.Fatal("Failed to send encap packet: ", err)
+		if err := outputter.Output(p, opts, buf); err != nil {
+			log.Fatal("Failed to output packet: ", err)
 		}
 
 		if *pktDelay > 0 {
