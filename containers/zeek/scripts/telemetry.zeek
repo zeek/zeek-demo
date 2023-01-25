@@ -16,20 +16,28 @@ hook Log::log_stream_policy(rec: any, id: Log::ID)
     Telemetry::counter_family_inc(log_writes_cf, vector(log_id));
     }
 
+# From analyzer/logging.zeek
+function analyzer_kind(atype: AllAnalyzers::Tag): string
+	{
+	if ( is_protocol_analyzer(atype) )
+		return "protocol";
+	else if ( is_packet_analyzer(atype) )
+		return "packet";
+	else if ( is_file_analyzer(atype) )
+		return "file";
+
+	Reporter::warning(fmt("Unknown kind of analyzer %s", atype));
+	return "unknown";
+	}
+
 # Analyzer confirmations / violations
 global analyzer_violations_cf = Telemetry::register_counter_family([
     $prefix="zeek",
     $name="analyzer_violations",
     $unit="1",
     $help_text="Number of analyzer violations broken down by analyzer",
-    $labels=vector("analyzer"),
+    $labels=vector("kind", "name"),
 ]);
-
-event analyzer_violation_info(atype: AllAnalyzers::Tag, info: AnalyzerViolationInfo)
-    {
-    local analyzer = to_lower(gsub(cat(atype), /:+/, "_"));
-    Telemetry::counter_family_inc(analyzer_violations_cf, vector(analyzer));
-    }
 
 # Analyzer confirmations broken down by analyzer
 global analyzer_confirmations_cf = Telemetry::register_counter_family([
@@ -37,13 +45,21 @@ global analyzer_confirmations_cf = Telemetry::register_counter_family([
     $name="analyzer_confirmations",
     $unit="1",
     $help_text="Number of analyzer confirmations broken down by analyzer",
-    $labels=vector("analyzer"),
+    $labels=vector("kind", "name"),
 ]);
+
+event analyzer_violation_info(atype: AllAnalyzers::Tag, info: AnalyzerViolationInfo)
+    {
+    local kind = analyzer_kind(atype);
+    local name = to_lower(Analyzer::name(atype));
+    Telemetry::counter_family_inc(analyzer_violations_cf, vector(kind, name));
+    }
 
 event analyzer_confirmation_info(atype: AllAnalyzers::Tag, info: AnalyzerConfirmationInfo)
     {
-    local analyzer = to_lower(gsub(cat(atype), /:+/, "_"));
-    Telemetry::counter_family_inc(analyzer_confirmations_cf, vector(analyzer));
+    local kind = analyzer_kind(atype);
+    local name = to_lower(Analyzer::name(atype));
+    Telemetry::counter_family_inc(analyzer_confirmations_cf, vector(kind, name));
     }
 
 module Tunnel;

@@ -752,7 +752,7 @@
           "exemplar": true,
           "expr": "rate(zeek_analyzer_confirmations_total{}[$__interval])",
           "interval": "",
-          "legendFormat": "{{ analyzer }}",
+          "legendFormat": "{{ kind }}-{{ name }}",
           "range": true,
           "refId": "A"
         }
@@ -842,10 +842,12 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "rate(zeek_analyzer_violations_total{}[$__interval])",
           "interval": "",
-          "legendFormat": "{{ analyzer }}",
+          "legendFormat": "{{ kind }}-{{ name }}",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -961,6 +963,6 @@
   "timezone": "",
   "title": "Zeek Telemetry",
   "uid": "kww9S-h4k",
-  "version": 11,
+  "version": 2,
   "weekStart": ""
 }
