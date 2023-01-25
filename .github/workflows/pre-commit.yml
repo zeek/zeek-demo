@@ -1,0 +1,28 @@
+name: Check pre-commit
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-python@v3
+
+    - name: Install hadolint so pre-commit can find it.
+      run: |
+        set -eux
+        export HADOLINT_VERSION=2.12.0
+        wget -q https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-x86_64 -O ./hadolint
+        chmod +x ./hadolint
+        ./hadolint --version
+        sudo mv ./hadolint /usr/local/bin
+        echo $PATH
+
+    - uses: pre-commit/action@v3.0.0

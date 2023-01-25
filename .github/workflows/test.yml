@@ -1,0 +1,61 @@
+---
+name: Integration Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  integration-test:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v1
+
+    - name: Build
+      run: docker-compose build
+
+    - name: Up
+      run: docker-compose up -d
+
+    - name: Install libpcap-dev
+      run: sudo apt-get install -y --no-install-recommends libpcap-dev
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.18
+
+    - name: Build capture-fwd
+      run: cd capture-fwd/capture-fwd && go build -o ../../capture-fwd.exe
+
+    - name: Replay and delay a bit
+      run: |
+        set -eux
+        sudo ./capture-fwd.exe -debug -delay 0.5ms -r capture-fwd/pcaps/httpbin-json.pcap
+        sleep 1
+        sudo ./capture-fwd.exe -debug -delay 0.5ms -r capture-fwd/pcaps/dns-http-https.pcap
+        # Give promtail a bit of time for picking up the logs.
+        sleep 5
+
+    - name: Query the logs
+      run: |
+        curl localhost:13100/loki/api/v1/query_range \
+            --data-urlencode  'query={filename=~".*log", job="zeeklogs"} | json' | \
+              jq -c '.data.result|.[].stream' | tee -a streams.log
+
+    - name: Show the logs
+      run: cat streams.log | jq
+
+    - name: Check for the eu.httpbin.org host name in the logs
+      run: grep 'eu.httpbin.org' streams.log
+
+    - name: Stop
+      if: always()
+      run: docker-compose down -v

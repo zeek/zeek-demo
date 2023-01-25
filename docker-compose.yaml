@@ -42,8 +42,6 @@ services:
     networks:
       - telemetry
 
-
-
 networks:
   telemetry: {}
   # Allow jumbo frames and name the bridge for monitoring.

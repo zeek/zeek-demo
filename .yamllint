@@ -1,0 +1,7 @@
+extends: default
+rules:
+  document-start: off
+  line-length:
+    max: 150
+  indentation: off
+  truthy: off
