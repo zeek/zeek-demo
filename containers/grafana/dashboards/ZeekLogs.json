@@ -25,7 +25,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 1,
+  "id": 2,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -135,7 +135,7 @@
             "uid": "P8E80F9AEF21F6940"
           },
           "editorMode": "code",
-          "expr": "{filename=\"/var/zeek/logs/dns.log\"} | json | line_format `Query for {{ .query }} from {{ .id_orig_h }}`",
+          "expr": "{filename=\"/var/zeek/logs/dns.log\"} | json query=\"query\", qtype_name=\"qtype_name\", id_orig_h=`[\"id.orig_h\"]`, answers=\"answers\" | line_format `Query for {{ .query }} of type {{.qtype_name}} from {{ .id_orig_h }}, got {{ .answers }}`",
           "queryType": "range",
           "refId": "A"
         }
@@ -160,13 +160,13 @@
     "list": []
   },
   "time": {
-    "from": "now-30m",
+    "from": "now-5m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Zeek Logs",
   "uid": "sPiHH8h4z",
-  "version": 3,
+  "version": 2,
   "weekStart": ""
 }
