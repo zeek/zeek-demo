@@ -1,0 +1,7 @@
+---
+default: true
+
+# Commands show output, nope
+MD014: false
+MD013:
+  line_length: 250
