@@ -40,6 +40,7 @@ var vni = flag.Int("vni", 4242, "Virtual Network Identifier")
 var encap = flag.String("encap", "vxlan", "vxlan|geneve")
 var debug = flag.Bool("debug", false, "Enable debug")
 var pktDelay = flag.Duration("delay", 0, "Delay after sending a packet.")
+var pktRate = flag.Float64("p", 0, "Replay with a fixed rate.")
 
 // Inner flow-hashing to determine UDP source port.
 func srcPort(packet gopacket.Packet) uint16 {
@@ -59,16 +60,55 @@ func srcPort(packet gopacket.Packet) uint16 {
 	return uint16(1024 + (transport_hash+net_hash)%50000)
 }
 
+type PacketDelayer struct {
+	delay            time.Duration
+	last_packet_time time.Time
+	last_write_time  time.Time
+}
+
+func (pd *PacketDelayer) Delay(p gopacket.Packet) {
+
+	if !pd.last_packet_time.IsZero() {
+
+		now := time.Now()
+		elapsed := now.Sub(pd.last_write_time)
+
+		delay := pd.delay
+		// Take the packet time
+		if delay == 0 {
+			delay = p.Metadata().Timestamp.Sub(pd.last_packet_time)
+			if delay < 0 {
+				log.Printf("ERROR Negative delay? %v", delay)
+				delay = 0
+			}
+		}
+
+		to_sleep := delay - elapsed
+		if *debug {
+			fmt.Printf("Delaying for %v\n", to_sleep)
+		}
+		if to_sleep > 0 {
+			time.Sleep(to_sleep)
+		}
+	}
+	pd.last_packet_time = p.Metadata().Timestamp
+	pd.last_write_time = time.Now()
+}
+
 type PacketOutputter interface {
 	// Output buf to a destination using opts. The original packet can be found in p
 	Output(p gopacket.Packet, opts gopacket.SerializeOptions, buf gopacket.SerializeBuffer) error
 }
 
 type UdpOutputter struct {
-	conn *net.IPConn
+	conn    *net.IPConn
+	delayer PacketDelayer
 }
 
-func (o UdpOutputter) Output(p gopacket.Packet, opts gopacket.SerializeOptions, buf gopacket.SerializeBuffer) error {
+func (o *UdpOutputter) Output(p gopacket.Packet, opts gopacket.SerializeOptions, buf gopacket.SerializeBuffer) error {
+
+	o.delayer.Delay(p)
+
 	data := buf.Bytes()
 	written, err := o.conn.Write(data)
 	if err != nil {
@@ -86,7 +126,7 @@ type PcapOutputter struct {
 	writer       *pcapgo.Writer
 }
 
-func (o PcapOutputter) Output(p gopacket.Packet, opts gopacket.SerializeOptions, buf gopacket.SerializeBuffer) (err error) {
+func (o *PcapOutputter) Output(p gopacket.Packet, opts gopacket.SerializeOptions, buf gopacket.SerializeBuffer) (err error) {
 
 	// Prepend the provided outer layers
 	for i := len(o.outer_layers) - 1; i >= 0; i-- {
@@ -135,6 +175,12 @@ func main() {
 		defer handle.Close()
 	} else {
 		log.Fatal("Neither -i nor -r used")
+	}
+
+	if *pktDelay > 0 && *pktRate > 0 {
+		log.Fatal("Provide either -delay or -p, not both")
+	} else if *pktRate > 0 {
+		*pktDelay = time.Duration(1.0 / *pktRate * 1000000000)
 	}
 
 	if len(flag.Args()) > 0 {
@@ -206,7 +252,7 @@ func main() {
 		w := pcapgo.NewWriter(f)
 		w.WriteFileHeader(65536, layers.LinkTypeEthernet) // new file, must do this.
 
-		outputter = PcapOutputter{
+		outputter = &PcapOutputter{
 			outer_layers: []gopacket.SerializableLayer{&eth_layer, &ip_layer},
 			writer:       w,
 		}
@@ -228,7 +274,12 @@ func main() {
 			DstIP: net.ParseIP(conn.RemoteAddr().String()),
 		}
 
-		outputter = UdpOutputter{conn: conn}
+		outputter = &UdpOutputter{
+			conn: conn,
+			delayer: PacketDelayer{
+				delay: *pktDelay,
+			},
+		}
 	}
 
 	buf := gopacket.NewSerializeBuffer()
@@ -260,10 +311,6 @@ func main() {
 
 		if err := outputter.Output(p, opts, buf); err != nil {
 			log.Fatal("Failed to output packet: ", err)
-		}
-
-		if *pktDelay > 0 {
-			time.Sleep(*pktDelay)
 		}
 	}
 }
