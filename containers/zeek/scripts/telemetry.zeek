@@ -116,6 +116,37 @@ event dns_message(c: connection, is_orig: bool, msg: dns_msg, len: count) {
     Telemetry::histogram_family_observe(dns_ancount_hf, vector(), msg$num_answers);
 }
 
+# Count the occurrences of different histories. You can have this from
+# the logs, of course, but it's nice in Prometheus, too.
+
+module Telemetry::Conn;
+
+global conn_history_cf = Telemetry::register_counter_family([
+    $prefix="zeek",
+    $name="monitored_connection_histories",
+    $unit="1",
+    $help_text="Summary of connection histories in monitored traffic",
+    $is_total=T,
+    $labels=vector("protocol", "history"),
+]);
+
+event connection_state_remove(c: connection)
+    {
+    # May be "nicer" to have upd and tcp as
+    # independent metrics.
+    local proto = cat(get_port_transport_proto(c$id$resp_p));
+
+    # If the history is large, snip it to reduce
+    # cardinality. This may seem useless, but things
+    # like scans should still show up prominently as
+    # well as possible indicators that monitoring
+    # traffic monitoring is borked.
+    local history = c$history;
+        if ( |history| > 5 )
+        history = fmt("%s..", history[:5]);
+
+    Telemetry::counter_family_inc(conn_history_cf, vector(proto, history));
+    }
 
 # Network stats
 
