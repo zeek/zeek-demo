@@ -1,21 +1,5 @@
 @load base/frameworks/telemetry
 
-# Log writes
-global log_writes_cf = Telemetry::register_counter_family([
-    $prefix="zeek",
-    $name="log_writes",
-    $unit="1",
-    $help_text="Number of log writes per stream",
-    $labels=vector("log_id"),
-]);
-
-hook Log::log_stream_policy(rec: any, id: Log::ID)
-    {
-    local log_id = to_lower(gsub(cat(id), /:+/, "_"));
-    log_id = gsub(log_id, /_log$/, "");
-    Telemetry::counter_family_inc(log_writes_cf, vector(log_id));
-    }
-
 # From analyzer/logging.zeek
 function analyzer_kind(atype: AllAnalyzers::Tag): string
 	{
@@ -147,52 +131,3 @@ event connection_state_remove(c: connection)
 
     Telemetry::counter_family_inc(conn_history_cf, vector(proto, history));
     }
-
-# Network stats
-
-module Telemetry::Network;
-
-global bytes_received_cf = Telemetry::register_counter_family([
-    $prefix="zeek",
-    $name="bytes_received",
-    $unit="1",
-    $help_text="Total number of bytes received",
-]);
-
-global packets_received_cf = Telemetry::register_counter_family([
-    $prefix="zeek",
-    $name="packets_received",
-    $unit="1",
-    $help_text="Total number of packets received",
-]);
-
-global packets_dropped_cf = Telemetry::register_counter_family([
-    $prefix="zeek",
-    $name="packets_dropped",
-    $unit="1",
-    $help_text="Total number of packets dropped",
-]);
-
-hook Telemetry::sync() {
-    local net_stats = get_net_stats();
-    Telemetry::counter_family_set(bytes_received_cf, vector(), net_stats$bytes_recvd);
-    Telemetry::counter_family_set(packets_received_cf, vector(), net_stats$pkts_recvd);
-    Telemetry::counter_family_set(packets_dropped_cf, vector(), net_stats$pkts_dropped);
-}
-
-module Telemetry::Event;
-
-global event_handler_invoked_cf = Telemetry::register_counter_family([
-    $prefix="zeek",
-    $name="event_handler_invocations",
-    $unit="1",
-    $labels=vector("name"),
-    $help_text="Number of times the given event handler was invoked.",
-]);
-
-hook Telemetry::sync() {
-    local event_handler_stats = get_event_handler_stats();
-
-    for ( _, enc in event_handler_stats )
-        Telemetry::counter_family_set(event_handler_invoked_cf, vector(enc$name), enc$times_called);
-}
