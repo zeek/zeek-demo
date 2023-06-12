@@ -25,7 +25,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 2,
+  "id": 3,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -78,7 +78,7 @@
         "x": 0,
         "y": 8
       },
-      "id": 6,
+      "id": 7,
       "options": {
         "dedupStrategy": "none",
         "enableLogDetails": true,
@@ -96,12 +96,12 @@
             "uid": "P8E80F9AEF21F6940"
           },
           "editorMode": "code",
-          "expr": "{filename=\"/var/zeek/logs/http.log\"} |  json | line_format `{{ .id_orig_h }} ({{ .user_agent }}) {{ .method }} {{ .host }}{{.uri}}. Response: {{ .status_code }} {{ .status_msg }}`",
+          "expr": "{filename=\"/var/zeek/logs/ssl.log\"} |  json | line_format `{{ .id_orig_h }} -> {{ .id_resp_h }}:{{ .id_resp_p }}: {{ .server_name }} {{ .ssl_history }} {{ .version }} {{ .cipher }}`",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "http.log",
+      "title": "ssl.log",
       "type": "logs"
     },
     {

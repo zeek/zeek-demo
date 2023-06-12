@@ -10,4 +10,7 @@ redef LogAscii::use_json=T;
 
 @load misc/loaded-scripts
 
+# This enables the zeek_net_ metrics.
+@load misc/stats
+
 @load ./scripts/telemetry

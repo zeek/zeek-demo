@@ -25,7 +25,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 2,
+  "id": 4,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -343,7 +343,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "builder",
-          "expr": "rate(zeek_bytes_received_total[$__rate_interval])",
+          "expr": "rate(zeek_net_received_bytes_total[$__rate_interval])",
           "legendFormat": "bytes received",
           "range": true,
           "refId": "A"
@@ -354,7 +354,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "builder",
-          "expr": "rate(zeek_packets_received_total[$__rate_interval])",
+          "expr": "rate(zeek_net_received_packets_total[$__rate_interval])",
           "hide": false,
           "legendFormat": "packets received",
           "range": true,
@@ -366,7 +366,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "builder",
-          "expr": "rate(zeek_packets_dropped_total[$__rate_interval])",
+          "expr": "rate(zeek_net_dropped_packets_total[$__rate_interval])",
           "hide": false,
           "legendFormat": "packets dropped",
           "range": true,
@@ -458,10 +458,12 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
+          "editorMode": "code",
           "exemplar": true,
-          "expr": "rate(zeek_log_writes_total{}[$__interval])",
+          "expr": "rate(zeek_log_stream_writes_total{}[$__interval])",
           "interval": "",
-          "legendFormat": "{{ log_id }}",
+          "legendFormat": "{{ stream }}",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -963,6 +965,6 @@
   "timezone": "",
   "title": "Zeek Telemetry",
   "uid": "kww9S-h4k",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }
