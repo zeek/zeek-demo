@@ -41,6 +41,7 @@ var encap = flag.String("encap", "vxlan", "vxlan|geneve")
 var debug = flag.Bool("debug", false, "Enable debug")
 var pktDelay = flag.Duration("delay", 0, "Delay after sending a packet.")
 var pktRate = flag.Float64("p", 0, "Replay with a fixed rate.")
+var dltRaw = flag.Bool("dltRaw", false, "Create a DLT_RAW pcap without ethernet layer")
 
 // Inner flow-hashing to determine UDP source port.
 func srcPort(packet gopacket.Packet) uint16 {
@@ -204,11 +205,20 @@ func main() {
 		if *destPortInt == 0 {
 			*destPortInt = 6081
 		}
+
+		// If the pcap is DLT_RAW, use IPv4 ethernet type.
+		//
+		// TODO: This really depends what is actually in the
+		//       pcap, it could have IPv6 and IPv4 mixed.
+		protocol := layers.EthernetTypeTransparentEthernetBridging
+		if handle.LinkType() == layers.LinkTypeRaw || handle.LinkType() == 12 {
+			protocol = layers.EthernetTypeIPv4
+		}
+
 		encap_layer = &layers.Geneve{
-			Version: 0,
-			VNI:     uint32(*vni),
-			// XXX: Is this always right?
-			Protocol: layers.EthernetTypeTransparentEthernetBridging,
+			Version:  0,
+			VNI:      uint32(*vni),
+			Protocol: protocol,
 		}
 	} else {
 		log.Fatal("Unknown encap: ", *encap)
@@ -219,21 +229,30 @@ func main() {
 	destIp := net.ParseIP(*destIpStr)
 
 	if *wfname != "" {
-		srcMac, err := net.ParseMAC(*srcMacStr)
-		if err != nil {
-			log.Fatal("Bad srcMac", err)
-		}
-		destMac, err := net.ParseMAC(*destMacStr)
-		if err != nil {
-			log.Fatal("Bad destMac", err)
+		link_type := layers.LinkTypeEthernet
+		var outer_layers []gopacket.SerializableLayer
+
+		if !*dltRaw {
+			srcMac, err := net.ParseMAC(*srcMacStr)
+			if err != nil {
+				log.Fatal("Bad srcMac", err)
+			}
+			destMac, err := net.ParseMAC(*destMacStr)
+			if err != nil {
+				log.Fatal("Bad destMac", err)
+			}
+
+			eth_type := layers.EthernetTypeIPv4
+			eth_layer := layers.Ethernet{
+				SrcMAC:       srcMac,
+				DstMAC:       destMac,
+				EthernetType: eth_type,
+			}
+			outer_layers = append(outer_layers, &eth_layer)
+		} else {
+			link_type = layers.LinkTypeRaw
 		}
 
-		eth_type := layers.EthernetTypeIPv4
-		eth_layer := layers.Ethernet{
-			SrcMAC:       srcMac,
-			DstMAC:       destMac,
-			EthernetType: eth_type,
-		}
 		// When writing to a pcap, need to provide an explicit srcIp
 		ip_layer = layers.IPv4{
 			Version:  4,
@@ -243,6 +262,8 @@ func main() {
 			Protocol: layers.IPProtocolUDP,
 		}
 
+		outer_layers = append(outer_layers, &ip_layer)
+
 		f, err := os.Create(*wfname)
 		if err != nil {
 			log.Fatal("Failed to open pcap for writing:", err)
@@ -250,10 +271,10 @@ func main() {
 		defer f.Close()
 
 		w := pcapgo.NewWriter(f)
-		w.WriteFileHeader(65536, layers.LinkTypeEthernet) // new file, must do this.
+		w.WriteFileHeader(65536, link_type)
 
 		outputter = &PcapOutputter{
-			outer_layers: []gopacket.SerializableLayer{&eth_layer, &ip_layer},
+			outer_layers: outer_layers,
 			writer:       w,
 		}
 
