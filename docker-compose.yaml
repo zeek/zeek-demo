@@ -1,10 +1,31 @@
-version: "3.9"
 services:
   zeek:
-    # image: zeek/zeek
     build:
-      context: containers/zeek
+      context: containers/zeek-systemd-udp
       dockerfile: Dockerfile
+
+    # The Zeek container uses systemd inside, so need to pre-mount
+    # a few things. If this scares you, use podman instead. The
+    # rw /sys/fs/cgroup mount is needed such that systemd can manage
+    # its own cgroup hierarchy.
+    volumes:
+      - type: bind
+        source: /sys/fs/cgroup
+        target: /sys/fs/cgroup
+    tmpfs:
+      - /run
+      - /tmp
+    cgroup: host
+    stop_signal: SIGRTMIN+3
+    tty: true
+
+    # Port forwarding for Geneve and VXLAN traffic. Note that you
+    # should the following in /etc/docker/daemon.json:
+    #     "userland-proxy": false
+    #
+    # This avoids the daemon causing packet re-ordering when its threads
+    # are moving between CPUs (or pin the userland docker-proxy process
+    # to a single CPU).
     ports:
       - "127.0.0.1:6081:6081/udp"
       - "127.0.0.1:4789:4789/udp"
