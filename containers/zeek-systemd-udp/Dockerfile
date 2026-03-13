@@ -1,4 +1,6 @@
+#
 # Build stage
+#
 FROM docker.io/zeek/zeek-dev:latest AS build
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get update \
@@ -13,6 +15,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Install the zeek-packet-source-udp package.
 WORKDIR /build/zeek-packet-source-udp
 COPY zeek-packet-source-udp ./
 WORKDIR /build/zeek-packet-source-udp/build
@@ -28,18 +31,20 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
     curl \
     ethtool \
     iproute2 \
-    net-tools \
-    liburing2 \
     jq \
+    liburing2 \
     ncat \
+    net-tools \
     procps \
-    tcpdump \
     systemd \
     systemd-sysv \
+    tcpdump \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
-# systemd cleanup pieces from the following repo:
+#
+# Cleanup the systemd installation to avoid starting unnecessary
+# services. Taken from the following repo:
 #
 # https://github.com/j8r/dockerfiles/blob/master/systemd/debian/Dockerfile
 #
@@ -74,15 +79,30 @@ RUN useradd \
     --shell /sbin/nologin zeek
 
 # Copy plugins from the build container into the runtime container.
-COPY --from=build /usr/local/zeek/lib/zeek/plugins/ /usr/local/zeek/lib/zeek/plugins/
-
-WORKDIR /
-COPY entrypoint.sh .
-RUN chmod +x ./entrypoint.sh
+COPY --from=build \
+    /usr/local/zeek/lib/zeek/plugins/ \
+    /usr/local/zeek/lib/zeek/plugins/
 
 RUN mv /usr/local/zeek/share/zeek/site/local.zeek /usr/local/zeek/share/zeek/site/local.zeek.orig
 COPY local.zeek /usr/local/zeek/share/zeek/site/local.zeek
 
+
+# Promtail is deprecated, but its easy to setup.
+# XXX: SHA256 is for amd64
+ENV PROMTAIL_SHA256=8b4e24b91568c851ecb87d7541999d92a90f10953c4fac78827b69887c8241b5
+ENV PROMTAIL_VERSION=3.6.7
+WORKDIR /etc/promtail
+RUN curl -m 30 -fL "https://github.com/grafana/loki/releases/download/v${PROMTAIL_VERSION}/promtail_${PROMTAIL_VERSION}_$(dpkg --print-architecture).deb" \
+        -o "promtail_${PROMTAIL_VERSION}_$(dpkg --print-architecture).deb" \
+    && echo "${PROMTAIL_SHA256}" "promtail_${PROMTAIL_VERSION}_$(dpkg --print-architecture).deb" | sha256sum --check \
+    && dpkg -i "promtail_${PROMTAIL_VERSION}_$(dpkg --print-architecture).deb" \
+    && rm -rf promtail_*deb
+
+RUN mv config.yml config.yml.orig
+COPY etc/promtail/config.yml .
+
 WORKDIR /usr/local/zeek/var/spool/zeek
 
-ENTRYPOINT ["/entrypoint.sh"]
+# systemd stopsignal
+STOPSIGNAL SIGRTMIN+3
+ENTRYPOINT ["/sbin/init"]
