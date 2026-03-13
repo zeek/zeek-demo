@@ -45,6 +45,19 @@ of packets:
 Other than that, the approaches have been found as ways to alleviate
 reordered packets on Linux specifically.
 
+### Disable the userspace docker-proxy
+
+Docker starts a docker-proxy to forward UDP packets from the host to the container.
+Because this is just a [userspace process](https://github.com/moby/moby/blob/master/cmd/docker-proxy/udp_proxy_linux.go),
+this can result in packet reordering if the process isn't pinned to exactly one CPU.
+
+It's possible to disable the use of this proxy via ``/etc/docker/daemon.json`` and
+instead let the kernel do the forwarding:
+
+    {
+        "userland-proxy": false
+    }
+
 ### CPU Pinning capture-fwd
 
 The most straightforward and effective fix is using `taskset` to pin
