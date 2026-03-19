@@ -32,6 +32,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
     ethtool \
     iproute2 \
     jq \
+    less \
     liburing2 \
     ncat \
     net-tools \
@@ -39,6 +40,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
     systemd \
     systemd-sysv \
     tcpdump \
+    vim-nox \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
