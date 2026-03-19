@@ -64,7 +64,7 @@ RUN rm -f /lib/systemd/system/multi-user.target.wants/* \
 # Forward all journald output to the console and select volatile
 # storage because we're in a container anyhow.
 WORKDIR /etc/systemd/journald.conf.d
-RUN printf '[Journal]\nForwardToConsole=yes\nStorage=volatile\n' > container.conf
+RUN printf '[Journal]\nForwardToConsole=yes\nStorage=volatile\nReadKMsg=no\n' > container.conf
 
 # Link in the zeek-systemd-generator executable into /etc/systemd/system-generators
 # and ensure the multi-user.target pulls in the zeek.target
