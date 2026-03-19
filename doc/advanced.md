@@ -42,17 +42,17 @@ of packets:
 
     $ sudo ./capture-fwd -delay 1ms -r test.pcap
 
-Other than that, the approaches have been found as ways to alleviate
+Other than that, the following approaches have been found as ways to alleviate
 reordered packets on Linux specifically.
 
-### Disable the userspace docker-proxy
+### Disable the userland docker-proxy
 
 Docker starts a docker-proxy to forward UDP packets from the host to the container.
 Because this is just a [userspace process](https://github.com/moby/moby/blob/master/cmd/docker-proxy/udp_proxy_linux.go),
-this can result in packet reordering if the process isn't pinned to exactly one CPU.
+it can result in packet reordering if the process's threads aren't pinned to exactly one CPU.
 
-It's possible to disable the use of this proxy via ``/etc/docker/daemon.json`` and
-instead let the kernel do the forwarding:
+It's possible to disable the use of this process via ``/etc/docker/daemon.json`` and
+instead let the kernel do the forwarding by adding the following:
 
     {
         "userland-proxy": false
@@ -109,7 +109,7 @@ listening on the loopback interface also improves the reordering issue.
 Concretely, fetch the IP of the zeek container, then pass it to `capture-fwd`:
 
     $ IP=$(docker-compose exec zeek ip addr show eth0 | sed -n 's,.*inet \([^/]*\)/.*$,\1,p')
-    $ echo $P
+    $ echo $IP
     172.24.0.2
     $ ./capture-fwd -delay 0us -destIp $IP -destPort 4789 -r ./1mio-packets.pcap
 
@@ -118,8 +118,8 @@ that's using up quite a bit of CPU time.
 
 ## Monitoring for Packet Drops
 
-In this setup, there can be quite a few places where packets are dropped
-or buffers run out of space.
+In a UDP traffic mirroring setup, there can be quite a few places where packets
+are dropped or buffers run out of space.
 
 ### UDP Send and Receive Buffers
 
