@@ -1,33 +1,29 @@
 services:
   zeek:
     build:
-      context: containers/zeek-systemd-udp
+      context: ../containers/zeek-systemd-udp
       dockerfile: Dockerfile
 
-    # The Zeek container uses systemd inside, so need to pre-mount
-    # a few things. If this scares you, use podman instead. The
-    # rw /sys/fs/cgroup mount is needed such that systemd can manage
-    # its own cgroup hierarchy.
-    volumes:
-      - type: bind
-        source: /sys/fs/cgroup
-        target: /sys/fs/cgroup
-    tmpfs:
-      - /run
-      - /tmp
-    cgroup: host
+    # The Zeek container uses systemd inside. Using privileged: true
+    # is the easiest to make this "just work with Docker. The Zeek
+    # processes launched by systemd are unprivileged.
+    privileged: true
     stop_signal: SIGRTMIN+3
     tty: true
 
-    # Port forwarding for Geneve and VXLAN traffic. Note that you
-    # should the following in /etc/docker/daemon.json:
+    # Bind-mount the etc/zeek directory for the configuration.
+    volumes:
+      - ./etc/zeek:/usr/local/zeek/etc/zeek
+
+    # Port forwarding for VXLAN encapsulated mirror traffic on the standard
+    # port. By default, Docker uses a proxy process to forward packets. Put
+    # the following into /etc/docker/daemon.json to use the kernel instead:
+    #
     #     "userland-proxy": false
     #
-    # This avoids the daemon causing packet re-ordering when its threads
-    # are moving between CPUs (or pin the userland docker-proxy process
-    # to a single CPU).
+    # This avoids packet reordering caused by the proxy process and its
+    # threads moving between processes.
     ports:
-      - "127.0.0.1:6081:6081/udp"
       - "127.0.0.1:4789:4789/udp"
     networks:
       - monitoring
@@ -35,7 +31,7 @@ services:
 
   loki:
     build:
-      context: containers/loki
+      context: ../containers/loki
       dockerfile: Dockerfile
     ports:
       - "127.0.0.1:13100:3100"
@@ -44,7 +40,7 @@ services:
 
   prometheus:
     build:
-      context: containers/prometheus
+      context: ../containers/prometheus
       dockerfile: Dockerfile
     ports:
       - "127.0.0.1:19090:9090"
@@ -53,7 +49,7 @@ services:
 
   grafana:
     build:
-      context: containers/grafana
+      context: ../containers/grafana
       dockerfile: Dockerfile
     environment:
       - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-zeek}

@@ -1,0 +1,68 @@
+# This compose.yaml file is used with podman compose. Podman
+# will auto-detect systemd usage in the zeek service so that
+# this can all run unprivileged. Note that because this is
+# running rootless, there'll be a UDP proxy employed for the
+# VXLAN/GENEVE ports which may cause packet reordering. If
+# this troubles you, use network_mode: host, or use Docker
+# with userland-proxy: false in daemon.json.
+services:
+  zeek:
+    build:
+      context: ../containers/zeek-systemd-udp
+      dockerfile: Dockerfile
+
+    stop_signal: SIGRTMIN+3
+    stop_grace_period: 30s
+    tty: true
+    environment:
+      - container=podman
+
+    # Bind-mount the etc/zeek directory.
+    volumes:
+      - ./etc/zeek:/usr/local/zeek/etc/zeek
+
+    # Port forwarding for GENEVE and VXLAN traffic.
+    ports:
+      - "127.0.0.1:6081:6081/udp"
+      - "127.0.0.1:4789:4789/udp"
+    networks:
+      - monitoring
+      - telemetry
+
+  loki:
+    build:
+      context: ../containers/loki
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:13100:3100"
+    networks:
+      - telemetry
+
+  prometheus:
+    build:
+      context: ../containers/prometheus
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:19090:9090"
+    networks:
+      - telemetry
+
+  grafana:
+    build:
+      context: ../containers/grafana
+      dockerfile: Dockerfile
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-zeek}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-zeek}
+    ports:
+      - "127.0.0.1:13000:3000"
+    networks:
+      - telemetry
+
+networks:
+  telemetry: {}
+  # Allow jumbo frames and name the bridge for monitoring.
+  monitoring:
+    driver_opts:
+      com.docker.network.driver.mtu: 9216
+      com.docker.network.bridge.name: br-zeekmon0
