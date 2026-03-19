@@ -9,7 +9,13 @@ services:
     # processes launched by systemd are unprivileged.
     privileged: true
     stop_signal: SIGRTMIN+3
+    stop_grace_period: 30s
     tty: true
+    environment:
+      - container=docker
+    tmpfs:
+      - /run
+      - /tmp
 
     # Bind-mount the etc/zeek directory for the configuration.
     volumes:
