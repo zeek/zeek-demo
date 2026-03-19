@@ -50,6 +50,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
 #
 # https://github.com/j8r/dockerfiles/blob/master/systemd/debian/Dockerfile
 #
+# hadolint ignore=DL3003,DL4006,SC2010
 RUN cd /lib/systemd/system/sysinit.target.wants/ \
     && rm $(ls | grep -v systemd-tmpfiles-setup)
 
@@ -94,6 +95,8 @@ COPY local.zeek /usr/local/zeek/share/zeek/site/local.zeek
 ENV PROMTAIL_SHA256=8b4e24b91568c851ecb87d7541999d92a90f10953c4fac78827b69887c8241b5
 ENV PROMTAIL_VERSION=3.6.7
 WORKDIR /etc/promtail
+
+# hadolint ignore=DL4006
 RUN curl -m 30 -fL "https://github.com/grafana/loki/releases/download/v${PROMTAIL_VERSION}/promtail_${PROMTAIL_VERSION}_$(dpkg --print-architecture).deb" \
         -o "promtail_${PROMTAIL_VERSION}_$(dpkg --print-architecture).deb" \
     && echo "${PROMTAIL_SHA256}" "promtail_${PROMTAIL_VERSION}_$(dpkg --print-architecture).deb" | sha256sum --check \
