@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: zeek
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zeek-standalone-config
+  namespace: zeek
+data:
+  zeek.conf: |
+    # interface = udp::0.0.0.0:4789:vxlan
+    interface = af_packet::eth0
+
+    workers = 4
+    loggers = 1
+    proxies = 2
+    workers_cpu_list = 0,1
+
+    worker_memory_max = 512M
+    logger_memory_max = 512M
+    proxy_memory_max = 512M
+    manager_memory_max = 512M
+
+    metrics_address = 127.0.0.1
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: zeek-standalone
+  namespace: zeek
+spec:
+  selector:
+    matchLabels:
+      app: zeek-standalone
+  template:
+    metadata:
+      labels:
+        app: zeek-standalone
+    spec:
+      nodeSelector:
+        node.zeek.org/profile: standalone
+
+      # Allow sniffing on the host network.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+
+      tolerations:
+        - operator: Exists
+
+      containers:
+        - name: zeek
+          image: ghcr.io/awelzel/zeek-dev-systemd-udp:latest
+          command: ["/sbin/init"]
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: zeek-config
+              mountPath: /usr/local/zeek/etc/zeek/zeek.conf
+              subPath: zeek.conf
+      volumes:
+        - name: zeek-config
+          configMap:
+            name: zeek-standalone-config
