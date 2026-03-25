@@ -1,0 +1,3 @@
+[submodule "containers/zeek-systemd-udp/zeek-packet-source-udp"]
+	path = containers/zeek-systemd-udp/zeek-packet-source-udp
+	url = git@github.com:zeek/zeek-packet-source-udp.git

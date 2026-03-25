@@ -1,0 +1,18 @@
+services:
+  zeek:
+    build:
+      context: ../containers/zeek-systemd-udp
+      dockerfile: Dockerfile
+
+    # The Zeek container uses systemd inside and privileged: true
+    # is the easiest to make this "just work". If you want to try
+    # running unprivileged, podman might be the better bet.
+    privileged: true
+    stop_signal: SIGRTMIN+3
+    tty: true
+
+    # Bind-mount the etc/zeek directory.
+    volumes:
+      - ./etc/zeek:/usr/local/zeek/etc/zeek
+
+    network_mode: host

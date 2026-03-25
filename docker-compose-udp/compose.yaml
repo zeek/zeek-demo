@@ -1,0 +1,74 @@
+services:
+  zeek:
+    build:
+      context: ../containers/zeek-systemd-udp
+      dockerfile: Dockerfile
+
+    # The Zeek container uses systemd inside. Using privileged: true
+    # is the easiest to make this "just work with Docker. The Zeek
+    # processes launched by systemd are unprivileged.
+    privileged: true
+    stop_signal: SIGRTMIN+3
+    stop_grace_period: 30s
+    tty: true
+    environment:
+      - container=docker
+    tmpfs:
+      - /run
+      - /tmp
+
+    # Bind-mount the etc/zeek directory for the configuration.
+    volumes:
+      - ./etc/zeek:/usr/local/zeek/etc/zeek
+
+    # Port forwarding for VXLAN encapsulated mirror traffic on the standard
+    # port. By default, Docker uses a proxy process to forward packets. Put
+    # the following into /etc/docker/daemon.json to use the kernel instead:
+    #
+    #     "userland-proxy": false
+    #
+    # This avoids packet reordering caused by the proxy process and its
+    # threads moving between processes.
+    ports:
+      - "127.0.0.1:4789:4789/udp"
+    networks:
+      - monitoring
+      - telemetry
+
+  loki:
+    build:
+      context: ../containers/loki
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:13100:3100"
+    networks:
+      - telemetry
+
+  prometheus:
+    build:
+      context: ../containers/prometheus
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:19090:9090"
+    networks:
+      - telemetry
+
+  grafana:
+    build:
+      context: ../containers/grafana
+      dockerfile: Dockerfile
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-zeek}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-zeek}
+    ports:
+      - "127.0.0.1:13000:3000"
+    networks:
+      - telemetry
+
+networks:
+  telemetry: {}
+  # Allow jumbo frames and name the bridge for monitoring.
+  monitoring:
+    driver_opts:
+      com.docker.network.driver.mtu: 9216
+      com.docker.network.bridge.name: br-zeekmon0

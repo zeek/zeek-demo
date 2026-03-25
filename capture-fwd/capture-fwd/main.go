@@ -61,13 +61,17 @@ func srcPort(packet gopacket.Packet) uint16 {
 	return uint16(1024 + (transport_hash+net_hash)%50000)
 }
 
-type PacketDelayer struct {
+type PacketDelayer interface {
+	Delay(p gopacket.Packet)
+}
+
+type SleepPacketDelayer struct {
 	delay            time.Duration
 	last_packet_time time.Time
 	last_write_time  time.Time
 }
 
-func (pd *PacketDelayer) Delay(p gopacket.Packet) {
+func (pd *SleepPacketDelayer) Delay(p gopacket.Packet) {
 
 	if !pd.last_packet_time.IsZero() {
 
@@ -95,6 +99,11 @@ func (pd *PacketDelayer) Delay(p gopacket.Packet) {
 	pd.last_packet_time = p.Metadata().Timestamp
 	pd.last_write_time = time.Now()
 }
+
+// The NoPacketDelayer doesn't delay a packet. Used for life traffic forwarding.
+type NoPacketDelayer struct{}
+
+func (pd *NoPacketDelayer) Delay(p gopacket.Packet) {}
 
 type PacketOutputter interface {
 	// Output buf to a destination using opts. The original packet can be found in p
@@ -149,9 +158,23 @@ func main() {
 	flag.Parse()
 	var handle *pcap.Handle
 	var err error
+
+	if *pktDelay > 0 && *pktRate > 0 {
+		log.Fatal("Provide either -delay or -p, not both")
+	} else if *pktRate > 0 {
+		*pktDelay = time.Duration(1.0 / *pktRate * 1000000000)
+	}
+
+	var delayer PacketDelayer
+
 	if *fname != "" {
 		if handle, err = pcap.OpenOffline(*fname); err != nil {
 			log.Fatal("PCAP OpenOffline error:", err)
+		}
+
+		// Use a sleeping packet delayer for PCAP reading.
+		delayer = &SleepPacketDelayer{
+			delay: *pktDelay,
 		}
 	} else if *iface != "" {
 		// This is a little complicated because we want to allow all possible options
@@ -174,14 +197,11 @@ func main() {
 			log.Fatal("PCAP Activate error:", err)
 		}
 		defer handle.Close()
+
+		// Disable any delays for live packet reading.
+		delayer = &NoPacketDelayer{}
 	} else {
 		log.Fatal("Neither -i nor -r used")
-	}
-
-	if *pktDelay > 0 && *pktRate > 0 {
-		log.Fatal("Provide either -delay or -p, not both")
-	} else if *pktRate > 0 {
-		*pktDelay = time.Duration(1.0 / *pktRate * 1000000000)
 	}
 
 	if len(flag.Args()) > 0 {
@@ -296,10 +316,8 @@ func main() {
 		}
 
 		outputter = &UdpOutputter{
-			conn: conn,
-			delayer: PacketDelayer{
-				delay: *pktDelay,
-			},
+			conn:    conn,
+			delayer: delayer,
 		}
 	}
 

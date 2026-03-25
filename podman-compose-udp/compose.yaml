@@ -1,10 +1,27 @@
-version: "3.9"
+# This compose.yaml file is used with podman compose. Podman
+# will auto-detect systemd usage in the zeek service so that
+# this can all run unprivileged. Note that because this is
+# running rootless, there'll be a UDP proxy employed for the
+# VXLAN/GENEVE ports which may cause packet reordering. If
+# this troubles you, use network_mode: host, or use Docker
+# with userland-proxy: false in daemon.json.
 services:
   zeek:
-    # image: zeek/zeek
     build:
-      context: containers/zeek
+      context: ../containers/zeek-systemd-udp
       dockerfile: Dockerfile
+
+    stop_signal: SIGRTMIN+3
+    stop_grace_period: 30s
+    tty: true
+    environment:
+      - container=podman
+
+    # Bind-mount the etc/zeek directory.
+    volumes:
+      - ./etc/zeek:/usr/local/zeek/etc/zeek
+
+    # Port forwarding for GENEVE and VXLAN traffic.
     ports:
       - "127.0.0.1:6081:6081/udp"
       - "127.0.0.1:4789:4789/udp"
@@ -14,7 +31,7 @@ services:
 
   loki:
     build:
-      context: containers/loki
+      context: ../containers/loki
       dockerfile: Dockerfile
     ports:
       - "127.0.0.1:13100:3100"
@@ -23,7 +40,7 @@ services:
 
   prometheus:
     build:
-      context: containers/prometheus
+      context: ../containers/prometheus
       dockerfile: Dockerfile
     ports:
       - "127.0.0.1:19090:9090"
@@ -32,7 +49,7 @@ services:
 
   grafana:
     build:
-      context: containers/grafana
+      context: ../containers/grafana
       dockerfile: Dockerfile
     environment:
       - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-zeek}

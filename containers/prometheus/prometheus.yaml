@@ -1,5 +1,5 @@
 global:
-  scrape_interval: 15s
+  scrape_interval: 5s
 
   external_labels:
     monitor: 'zeek-demo'
@@ -9,11 +9,15 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  - job_name: 'loki'
-    static_configs:
-      - targets: ['loki:3100']
-
-  - job_name: 'zeek'
+  - job_name: zeek-local-http-sd
     scrape_interval: 5s
-    static_configs:
-      - targets: ['zeek:9911']
+    http_sd_configs:
+      - url: http://zeek:9991/services.json
+        refresh_interval: 10s
+    # As of Zeek 8.2-dev, the manager returns 127.0.0.1 because this is
+    # what the cluster layout generates?
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: '127\.0\.0\.1(:\d+)'
+        replacement: 'zeek${1}'
+        target_label: __address__

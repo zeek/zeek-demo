@@ -4,44 +4,24 @@
       {
         "builtIn": 1,
         "datasource": {
-          "type": "prometheus",
-          "uid": "PBFA97CFB590B2093"
+          "type": "grafana",
+          "uid": "-- Grafana --"
         },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
-        "target": {
-          "limit": 100,
-          "matchAny": false,
-          "tags": [],
-          "type": "dashboard"
-        },
         "type": "dashboard"
       }
     ]
   },
-  "description": "",
+  "description": "A dashboard for Zeek operators.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 4,
+  "id": 0,
   "links": [],
-  "liveNow": false,
   "panels": [
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 0
-      },
-      "id": 19,
-      "panels": [],
-      "title": "Process",
-      "type": "row"
-    },
     {
       "datasource": {
         "type": "prometheus",
@@ -53,11 +33,14 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisSoftMin": 0,
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -66,6 +49,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -73,6 +57,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -88,7 +73,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -98,15 +83,150 @@
           },
           "unit": "percentunit"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/.* restarts/"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "solid"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "custom.showValues",
+                "value": false
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "eps"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Process Restarts"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-red",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.scaleDistribution",
+                "value": {
+                  "type": "linear"
+                }
+              },
+              {
+                "id": "custom.spanNulls",
+                "value": false
+              },
+              {
+                "id": "custom.axisSoftMin",
+                "value": -10
+              },
+              {
+                "id": "custom.axisSoftMax",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/worker-[0-9]+$/"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-green",
+                  "mode": "shades"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/logger-[0-9]+$/"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-blue",
+                  "mode": "shades"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "manager"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/proxy-[0-9]+$/"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-purple",
+                  "mode": "shades"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "total"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "super-light-red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 8,
+        "h": 13,
         "w": 12,
         "x": 0,
-        "y": 1
+        "y": 0
       },
-      "id": 8,
+      "id": 1,
       "options": {
         "legend": {
           "calcs": [],
@@ -115,24 +235,53 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
+      "pluginVersion": "12.3.5",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "exemplar": true,
-          "expr": "rate(process_cpu_seconds_total{job=\"zeek\"}[1m])",
-          "interval": "",
-          "legendFormat": "",
+          "editorMode": "code",
+          "expr": "sum by (node) (irate(process_cpu_user_seconds_total{job=\"$job\"}[$__rate_interval]) + irate(process_cpu_system_seconds_total{job=\"$job\"}[$__rate_interval]))",
+          "legendFormat": "{{node}}",
+          "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "sum(irate(process_cpu_user_seconds_total{job=\"$job\"}[$__rate_interval]) + irate(process_cpu_system_seconds_total{job=\"$job\"}[$__rate_interval]))",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "total",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "clamp_min(-5*changes(process_start_time_seconds{job=\"$job\"}[30s]), -10)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "{{ node }} restarts ",
+          "range": true,
+          "refId": "C"
         }
       ],
-      "title": "CPU Usage %",
+      "title": "CPU Usage and Restarts",
       "type": "timeseries"
     },
     {
@@ -146,11 +295,14 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisSoftMin": 0,
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -159,6 +311,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -166,6 +319,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -176,13 +330,12 @@
             }
           },
           "mappings": [],
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -195,52 +348,43 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 13,
         "w": 12,
         "x": 12,
-        "y": 1
+        "y": 0
       },
-      "id": 10,
+      "id": 5,
       "options": {
         "legend": {
-          "calcs": [],
+          "calcs": [
+            "lastNotNull"
+          ],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
+      "pluginVersion": "12.3.5",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "exemplar": true,
-          "expr": "process_resident_memory_bytes{job=\"zeek\"}",
-          "interval": "",
-          "legendFormat": "",
+          "editorMode": "code",
+          "expr": "process_resident_memory_bytes{node!=\"\", job=\"$job\"}",
+          "legendFormat": "{{node}}",
+          "range": true,
           "refId": "A"
         }
       ],
-      "title": "Memory Usage",
+      "title": "Memory",
       "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 9
-      },
-      "id": 26,
-      "panels": [],
-      "title": "Network",
-      "type": "row"
     },
     {
       "datasource": {
@@ -253,11 +397,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "Packet Rate",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -266,14 +412,19 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
+            "lineStyle": {
+              "fill": "solid"
+            },
             "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
             "showPoints": "auto",
-            "spanNulls": false,
+            "showValues": false,
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -288,7 +439,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -302,7 +453,37 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "bytes received"
+              "options": "dropped total"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "sum total"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/.*packet lag/"
             },
             "properties": [
               {
@@ -311,19 +492,123 @@
               },
               {
                 "id": "unit",
-                "value": "binBps"
+                "value": "s"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Packet Lag"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "link packets"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dropped packets"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "max packet lag"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "avg packet lag"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "min packet lag"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "__systemRef": "hideSeriesFrom",
+            "matcher": {
+              "id": "byNames",
+              "options": {
+                "mode": "exclude",
+                "names": [
+                  "dropped packets",
+                  "link packets"
+                ],
+                "prefix": "All except:",
+                "readOnly": true
+              }
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": false,
+                  "tooltip": true,
+                  "viz": true
+                }
               }
             ]
           }
         ]
       },
       "gridPos": {
-        "h": 8,
+        "h": 13,
         "w": 12,
         "x": 0,
-        "y": 10
+        "y": 13
       },
-      "id": 32,
+      "id": 7,
       "options": {
         "legend": {
           "calcs": [],
@@ -332,31 +617,23 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
+      "pluginVersion": "12.3.5",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "editorMode": "builder",
-          "expr": "rate(zeek_net_received_bytes_total[$__rate_interval])",
-          "legendFormat": "bytes received",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "builder",
-          "expr": "rate(zeek_net_received_packets_total[$__rate_interval])",
+          "editorMode": "code",
+          "expr": "sum(irate(zeek_net_dropped_packets_total{job=\"$job\"}[$__rate_interval]))",
           "hide": false,
-          "legendFormat": "packets received",
+          "instant": false,
+          "legendFormat": "dropped packets",
           "range": true,
           "refId": "B"
         },
@@ -365,15 +642,55 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "editorMode": "builder",
-          "expr": "rate(zeek_net_dropped_packets_total[$__rate_interval])",
+          "editorMode": "code",
+          "expr": "sum(irate(zeek_net_link_packets_total{job=\"$job\"}[$__rate_interval]))",
           "hide": false,
-          "legendFormat": "packets dropped",
+          "instant": false,
+          "legendFormat": "link packets",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "max(zeek_net_packet_lag_seconds{job=\"$job\"})",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "max packet lag",
           "range": true,
           "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "min(zeek_net_packet_lag_seconds{job=\"$job\"})",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "min packet lag",
+          "range": true,
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "avg(zeek_net_packet_lag_seconds{job=\"$job\"})",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "avg packet lag",
+          "range": true,
+          "refId": "E"
         }
       ],
-      "title": "Monitoring Traffic Bytes and Packets",
+      "title": "Network",
       "type": "timeseries"
     },
     {
@@ -387,30 +704,37 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 0,
+            "fillOpacity": 30,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
+            "lineStyle": {
+              "fill": "solid"
+            },
             "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -422,7 +746,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -434,12 +758,12 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 13,
         "w": 12,
         "x": 12,
-        "y": 10
+        "y": 13
       },
-      "id": 4,
+      "id": 8,
       "options": {
         "legend": {
           "calcs": [],
@@ -448,10 +772,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
+      "pluginVersion": "12.3.5",
       "targets": [
         {
           "datasource": {
@@ -459,102 +785,9 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "exemplar": true,
-          "expr": "rate(zeek_log_stream_writes_total{}[$__interval])",
-          "interval": "",
-          "legendFormat": "{{ stream }}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Log Writes per second",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 18
-      },
-      "id": 28,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "builder",
-          "expr": "zeek_active_sessions",
-          "legendFormat": "{{protocol}}",
+          "expr": "sum by (protocol) (zeek_active_sessions{job=\"$job\"})",
+          "instant": false,
+          "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
@@ -573,11 +806,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "Writes/s",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -586,6 +821,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -593,6 +829,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -608,7 +845,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -616,122 +853,17 @@
               }
             ]
           },
-          "unit": "none"
+          "unit": "logs/s"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 13,
         "w": 12,
-        "x": 12,
-        "y": 18
-      },
-      "id": 30,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "builder",
-          "expr": "rate(zeek_total_sessions_total[$__rate_interval])",
-          "legendFormat": "{{protocol}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Sessions per second",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
         "y": 26
       },
-      "id": 15,
-      "panels": [],
-      "title": "General",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 27
-      },
-      "id": 35,
+      "id": 4,
       "options": {
         "legend": {
           "calcs": [],
@@ -740,10 +872,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
+      "pluginVersion": "12.3.5",
       "targets": [
         {
           "datasource": {
@@ -751,15 +885,15 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "exemplar": true,
-          "expr": "rate(zeek_analyzer_confirmations_total{}[$__interval])",
-          "interval": "",
-          "legendFormat": "{{ kind }}-{{ name }}",
+          "expr": "sum by (stream) (irate(zeek_log_stream_writes_total{job=\"$job\"}[$__rate_interval]))",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "__auto",
           "range": true,
-          "refId": "A"
+          "refId": "B"
         }
       ],
-      "title": "Analyzer Confirmations per second",
+      "title": "Log Streams",
       "type": "timeseries"
     },
     {
@@ -767,17 +901,21 @@
         "type": "prometheus",
         "uid": "PBFA97CFB590B2093"
       },
+      "description": "Positive: Outgoing\nNegative: Incoming",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisCenteredZero": false,
+            "axisBorderShow": false,
+            "axisCenteredZero": true,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisSoftMin": 1,
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -786,6 +924,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -793,6 +932,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -808,7 +948,120 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "eps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 13,
+        "w": 12,
+        "x": 12,
+        "y": 26
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.5",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "-irate(zeek_cluster_core_incoming_events_total{job=\"$job\"}[$__rate_interval])",
+          "hide": false,
+          "legendFormat": "{{node}} incoming total",
+          "range": true,
+          "refId": "Incoming Total"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "irate(zeek_cluster_core_outgoing_events_total{job=\"$job\"}[$__rate_interval])",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "{{ node }} outgoing total",
+          "range": true,
+          "refId": "Outgoing Total"
+        }
+      ],
+      "title": "Cluster Events/s",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
               },
               {
                 "color": "red",
@@ -820,10 +1073,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 13,
         "w": 12,
-        "x": 12,
-        "y": 27
+        "x": 0,
+        "y": 39
       },
       "id": 6,
       "options": {
@@ -834,10 +1087,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
+      "pluginVersion": "12.3.5",
       "targets": [
         {
           "datasource": {
@@ -845,15 +1100,41 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "exemplar": true,
-          "expr": "rate(zeek_analyzer_violations_total{}[$__interval])",
-          "interval": "",
-          "legendFormat": "{{ kind }}-{{ name }}",
+          "expr": "zeek_cluster_zeromq_onloop_drops_total{job=\"$job\"}",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "{{node}} {{__name__}}",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "zeek_cluster_zeromq_xpub_drops_total{job=\"$job\"}",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "{{node}} {{__name__}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "zeek_cluster_zeromq_msg_errors_total{job=\"$job\"}",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "{{node}} {{__name__}}",
+          "range": true,
+          "refId": "C"
         }
       ],
-      "title": "Analyzer Violations per second",
+      "title": "ZeroMQ Drops and Errors",
       "type": "timeseries"
     },
     {
@@ -861,17 +1142,21 @@
         "type": "prometheus",
         "uid": "PBFA97CFB590B2093"
       },
+      "description": "Positive: Outgoing\nNegative: Incoming\n\nThis needs:\n```\nredef Cluster::Telemetry::core_metrics += {\n  Cluster::Telemetry::VERBOSE,\n};\n```",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisCenteredZero": false,
+            "axisBorderShow": false,
+            "axisCenteredZero": true,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisSoftMin": 1,
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -880,6 +1165,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -887,6 +1173,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -902,7 +1189,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -910,17 +1197,17 @@
               }
             ]
           },
-          "unit": "events/s"
+          "unit": "eps"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 13,
         "w": 12,
-        "x": 0,
-        "y": 35
+        "x": 12,
+        "y": 39
       },
-      "id": 34,
+      "id": 2,
       "options": {
         "legend": {
           "calcs": [],
@@ -929,42 +1216,82 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
+      "pluginVersion": "12.3.5",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "editorMode": "builder",
-          "expr": "rate(zeek_event_handler_invocations_total[$__rate_interval])",
-          "legendFormat": "{{name}}",
+          "editorMode": "code",
+          "expr": "-irate(zeek_cluster_core_verbose_incoming_events_total{job=\"$job\"}[$__rate_interval])",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "{{node}} incoming {{handler}} on {{ topic }}",
           "range": true,
-          "refId": "A"
+          "refId": "Incoming Verbose"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "irate(zeek_cluster_core_verbose_outgoing_events_total{job=\"$job\"}[$__rate_interval])",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "{{node}} outgoing {{handler}} on {{ topic }}",
+          "range": true,
+          "refId": "Outgoing Verbose"
         }
       ],
-      "title": "Event Handler Invocations per second",
+      "title": "Verbose Cluster Events/s",
       "type": "timeseries"
     }
   ],
-  "refresh": false,
-  "schemaVersion": 37,
-  "style": "dark",
+  "preload": false,
+  "schemaVersion": 42,
   "tags": [],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "allowCustomValue": false,
+        "current": {
+          "text": "zeek-local-http-sd",
+          "value": "zeek-local-http-sd"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
+        "definition": "label_values(zeek_version_info,job)",
+        "description": "",
+        "label": "Job",
+        "name": "job",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(zeek_version_info,job)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      }
+    ]
   },
   "time": {
     "from": "now-15m",
     "to": "now"
   },
   "timepicker": {},
-  "timezone": "",
-  "title": "Zeek Telemetry",
-  "uid": "kww9S-h4k",
-  "version": 3,
-  "weekStart": ""
+  "timezone": "browser",
+  "title": "ZeekOps Dashboard",
+  "uid": "zem24zv",
+  "version": 2
 }

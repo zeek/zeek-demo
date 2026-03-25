@@ -1,4 +1,4 @@
-FROM grafana/grafana:9.3.2
+FROM docker.io/grafana/grafana:12.3
 
 USER root
 RUN mv /etc/grafana/grafana.ini /etc/grafana/grafana.ini.orig
