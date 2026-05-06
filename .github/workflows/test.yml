@@ -53,7 +53,10 @@ jobs:
               jq -c '.data.result|.[].stream' | tee -a streams.log
 
     - name: Show the logs
-      run: cat streams.log | jq
+      run: jq < streams.log
+
+    - name: docker compose logs
+      run: cd docker-compose-udp && docker compose logs zeek loki
 
     - name: Check for the eu.httpbin.org host name in the logs
       run: grep 'eu.httpbin.org' streams.log
