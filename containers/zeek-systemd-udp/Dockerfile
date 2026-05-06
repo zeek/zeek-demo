@@ -1,27 +1,4 @@
 #
-# Build stage
-#
-FROM docker.io/zeek/zeek-dev:latest AS build
-
-RUN DEBIAN_FRONTEND=noninteractive apt-get update \
-    && apt-get install -y --no-install-recommends \
-        cmake \
-        g++ \
-        gcc \
-        libc6-dev \
-        liburing-dev \
-        libpcap-dev \
-        make \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install the zeek-packet-source-udp package.
-WORKDIR /build/zeek-packet-source-udp
-COPY zeek-packet-source-udp ./
-WORKDIR /build/zeek-packet-source-udp/build
-RUN cmake ../ && make && make -j 2 install
-
-#
 # Runtime stage
 #
 FROM docker.io/zeek/zeek-dev:latest
@@ -81,14 +58,9 @@ RUN useradd \
     --no-create-home \
     --shell /sbin/nologin zeek
 
-# Copy plugins from the build container into the runtime container.
-COPY --from=build \
-    /usr/local/zeek/lib/zeek/plugins/ \
-    /usr/local/zeek/lib/zeek/plugins/
-
-RUN mv /usr/local/zeek/share/zeek/site/local.zeek /usr/local/zeek/share/zeek/site/local.zeek.orig
-COPY local.zeek /usr/local/zeek/share/zeek/site/local.zeek
-
+WORKDIR /usr/local/zeek/share/zeek/site
+RUN mv local.zeek local.zeek.orig
+COPY local.zeek .
 
 # Promtail is deprecated, but its easy to setup.
 # XXX: SHA256 is for amd64
