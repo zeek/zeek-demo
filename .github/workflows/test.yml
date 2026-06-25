@@ -32,7 +32,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: '1.23'
+        go-version: '1.26'
 
     - name: Build capture-fwd
       run: cd capture-fwd/capture-fwd && go build -o ../../capture-fwd.exe
@@ -53,7 +53,10 @@ jobs:
               jq -c '.data.result|.[].stream' | tee -a streams.log
 
     - name: Show the logs
-      run: cat streams.log | jq
+      run: jq < streams.log
+
+    - name: docker compose logs
+      run: cd docker-compose-udp && docker compose logs zeek loki
 
     - name: Check for the eu.httpbin.org host name in the logs
       run: grep 'eu.httpbin.org' streams.log

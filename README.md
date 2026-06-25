@@ -77,7 +77,7 @@ towards the container.
 
 ### capture-fwd
 
-A small [gopacket](https://github.com/google/gopacket)-based program is located
+A small [gopacket](https://github.com/gopacket/gopacket)-based program is located
 in the [capture-fwd](./capture-fwd) directory. This tool supports encapsulation
 of packets using the VXLAN or GENVE protocol and sending it to a configurable
 destination (default 127.0.0.1).
