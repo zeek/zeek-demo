@@ -409,10 +409,11 @@ std::pair<InterfaceWorkerConfig, std::string> zeek::detail::InterfaceWorkerConfi
             iwc.interface = option.Value();
         }
         else if ( key == "workers" ) {
-            if ( auto workers = parse_int(option.Value()); workers )
-                iwc.workers = *workers;
+            auto result = parse_int(option.Value());
+            if ( result && *result >= 1 )
+                iwc.workers = *result;
             else {
-                return {iwc, "invalid workers value"};
+                return {iwc, "invalid workers value: '" + option.Value() + "'"};
             }
         }
         else if ( key == "worker_args" ) {
@@ -588,11 +589,27 @@ ZeekClusterConfig parse_config(const std::filesystem::path& default_zeek_base_di
         else if ( key == "group" ) {
             config.group = option.Value();
         }
+        else if ( key == "manager" ) {
+            // manager only support 0 or 1 for now. on or off.
+            auto result = parse_int(option.Value());
+            if ( result == 0 || result == 1 )
+                config.manager = result == 1;
+            else
+                config.Error("invalid manager value: '" + option.Value() + "'");
+        }
         else if ( key == "proxies" ) {
-            config.proxies = std::atoi(option.Value().c_str());
+            auto result = parse_int(option.Value());
+            if ( result && *result >= 0 )
+                config.proxies = *result;
+            else
+                config.Error("invalid proxies value: '" + option.Value() + "'");
         }
         else if ( key == "loggers" ) {
-            config.loggers = std::atoi(option.Value().c_str());
+            auto result = parse_int(option.Value());
+            if ( result && result >= 0 )
+                config.loggers = *result;
+            else
+                config.Error("invalid loggers value: '" + option.Value() + "'");
         }
         else if ( key == "base_dir" ) {
             if ( ! option.Value().empty() )
@@ -609,6 +626,9 @@ ZeekClusterConfig parse_config(const std::filesystem::path& default_zeek_base_di
         }
         else if ( key == "cluster_backend_args" ) {
             config.cluster_backend_args = option.Value();
+        }
+        else if ( key == "cluster_layout" ) {
+            config.cluster_layout = option.Value();
         }
         else if ( key == "port" ) {
             config.port = std::atoi(option.Value().c_str());
@@ -670,10 +690,27 @@ ZeekClusterConfig parse_config(const std::filesystem::path& default_zeek_base_di
     // Assume zeek-cluster-layout-generator is in /bin
     config.cluster_layout_generator = config.ZeekBaseDir() / "bin" / "zeek-cluster-layout-generator";
 
+    // If the manager is disabled, require an explicit cluster_layout configuration for now.
+    if ( ! config.manager && ! config.cluster_layout.has_value() )
+        config.Error("disabled manager requires cluster_layout");
+
     return config;
 }
 
-std::string ZeekClusterConfig::ClusterLayoutGeneratorCommand() const {
+std::string ZeekClusterConfig::ClusterLayoutCommand() const {
+    // If a cluster_layout is given in the configuration, copy that
+    // into the generated script directory.
+    if ( cluster_layout.has_value() ) {
+        std::vector<std::string> cmd_args = {
+            "cp",
+            "-f",
+            cluster_layout->string(),
+            (GeneratedScriptsDir() / "cluster-layout.zeek").string(),
+        };
+
+        return join(cmd_args);
+    }
+
     // First, construct the -W argument. Either it's a single number when
     // there's only a single non-tagged interface, or it's in eth0:2,eth1:2,...
     // form as to produce tagged worker names.
