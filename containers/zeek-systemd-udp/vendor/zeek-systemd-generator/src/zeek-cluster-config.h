@@ -191,7 +191,7 @@ public:
 private:
     std::string tag;
     std::string interface;
-    int workers = 0;
+    int workers = -1;
 
     std::string args; // worker specific args to append
     std::vector<std::pair<const std::string, const std::string>> envs;
@@ -217,8 +217,6 @@ public:
     bool Exists() const noexcept { return exists; }
 
     bool IsValid() const noexcept { return errors.empty(); }
-
-    bool IsEnabled() const noexcept { return ! interface_worker_configs.empty(); }
 
     void Error(std::string msg) { errors.emplace_back(std::move(msg)); }
 
@@ -305,6 +303,16 @@ public:
      * @return The value of the cluster backend arguments.
      */
     const std::string& ClusterBackendArgs() const { return cluster_backend_args; }
+
+    /**
+     * If cluster_node_prefix is set, return the given string prepended with the prefix and a dash, else return s.
+     */
+    std::string PrefixedClusterNode(const std::string& s) const {
+        if ( cluster_node_prefix )
+            return *cluster_node_prefix + "-" + s;
+
+        return s;
+    }
 
     /**
      * Computes the PATH to use from ext_path, base_dir / bin and path.
@@ -406,6 +414,9 @@ private:
 
     // Manually specify the cluster-layout.zeek
     std::optional<std::filesystem::path> cluster_layout;
+
+    // Prefix for CLUSTER_NODE
+    std::optional<std::string> cluster_node_prefix;
 
     std::vector<std::string> errors;
 };
