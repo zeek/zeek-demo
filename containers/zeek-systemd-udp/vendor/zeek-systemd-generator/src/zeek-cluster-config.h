@@ -18,6 +18,46 @@
 
 namespace zeek::detail {
 
+/**
+ *Split \a v by \a delim into a vector of string views.
+ */
+std::vector<std::string_view> split(std::string_view v, char delim);
+
+/**
+ * " ".join(...) in C++, meh.
+ */
+std::string join(std::span<const std::string> args, const std::string& sep = " ");
+
+/**
+ * Replace \a s with with all occurrences of ${var} replaced with the values of var in the map \a vars.
+ */
+std::optional<std::string> substitute_vars(const std::string& s, const std::map<std::string, std::string>& vars);
+
+class Section;
+
+/**
+ * Parses \a content as ini-like format, returning vector of Section instances
+ * or a vector of error messages.
+ *
+ * Options not preceded by a [section] are placed into an unnamed section that
+ * has an empty string as the name. This will be the first entry in the returned
+ * list of sections. Zeek's config format either requires all options to exist
+ * in the unnamed section, or only in sections, but not mixed.
+ *
+ * This parser supports multi-value options by recognizing continuation lines
+ * and inserting every line as a separate value to support things like environment
+ * variables.
+ *
+ * worker_env =
+ *   key1=val1
+ *   key2=val2
+ *
+ * @param content The full content of zeek.conf as a string.
+ *
+ * @return Parsed sections and a vector of errors. If any errors occurred, do not work with the sections.
+ */
+std::pair<std::vector<Section>, std::vector<std::string>> parse_ini_like(const std::string& content);
+
 class ZeekClusterConfig;
 
 /**
@@ -65,6 +105,21 @@ private:
 };
 
 /**
+ * Environment variable.
+ */
+class EnvVar {
+public:
+    EnvVar(std::string key, std::string value) : key(std::move(key)), value(std::move(value)) {}
+
+    const std::string& Key() const noexcept { return key; }
+    const std::string& Value() const noexcept { return value; }
+
+private:
+    std::string key;
+    std::string value;
+};
+
+/**
  * A single option.
  *
  * Most options have just a single value, but options can span multiple
@@ -75,11 +130,36 @@ public:
     Option(std::string key, std::string value) : key(std::move(key)) { values.push_back(std::move(value)); }
 
     const std::string& Key() const { return key; }
-    const std::string& Value() const { return values[0]; }
+    const std::string& Value() const {
+        if ( values.size() > 1 )
+            throw std::logic_error("ignoring extra values from " + key);
+
+        return values[0];
+    }
 
     void AddValue(std::string value) { values.push_back(std::move(value)); }
 
     std::span<const std::string> Values() const { return values; }
+
+    std::string JoinedValues() const { return join(values); };
+
+    std::pair<std::vector<EnvVar>, std::string> AsEnvVars() const {
+        std::vector<EnvVar> envs;
+        // Split all values into key-value pairs and return.
+        for ( const auto& value : values ) {
+            if ( value.empty() )
+                continue;
+
+            auto idx = value.find('=');
+            if ( idx == std::string::npos )
+                return {{}, "invalid env value '" + value + "'"};
+
+            std::string k = value.substr(0, idx);
+            std::string v = value.substr(idx + 1);
+            envs.emplace_back(EnvVar(std::move(k), std::move(v)));
+        }
+        return {std::move(envs), ""};
+    }
 
 private:
     std::string key;
@@ -111,6 +191,7 @@ private:
     std::string name;
     std::vector<Option> options;
 };
+
 
 /**
  * Hold info about an interface worker configuration.
@@ -186,7 +267,7 @@ public:
 
     std::optional<const std::string> NumaPolicy() const { return numa_policy; }
 
-    const std::span<const std::pair<const std::string, const std::string>> Envs() const { return envs; }
+    std::span<const EnvVar> Env() const { return std::span{env}; }
 
 private:
     std::string tag;
@@ -194,7 +275,7 @@ private:
     int workers = -1;
 
     std::string args; // worker specific args to append
-    std::vector<std::pair<const std::string, const std::string>> envs;
+    std::vector<EnvVar> env;
 
     std::optional<int> nice;
     std::string memory_max;
@@ -217,6 +298,16 @@ public:
     bool Exists() const noexcept { return exists; }
 
     bool IsValid() const noexcept { return errors.empty(); }
+
+    /**
+     * @return true if this config was found in <PREFIX>/etc/zeek/cluster/, rather than <PREFIX>/etc/zeek/
+     */
+    bool IsInClusterDir() const;
+
+    /**
+     * @return the path to the cluster directory if IsInClusterDir() is true. Just the parent of SourcePath().
+     */
+    std::filesystem::path ClusterDir() const;
 
     void Error(std::string msg) { errors.emplace_back(std::move(msg)); }
 
@@ -298,6 +389,15 @@ public:
      * @return The value of the args configuration.
      */
     const std::string& Args() const { return args; }
+    const std::string& ManagerArgs() const { return manager_args; }
+    const std::string& LoggerArgs() const { return logger_args; }
+    const std::string& ProxyArgs() const { return proxy_args; }
+
+    std::span<const EnvVar> Env() const { return std::span{env}; }
+    std::span<const EnvVar> ManagerEnv() const { return std::span{manager_env}; }
+    std::span<const EnvVar> LoggerEnv() const { return std::span{logger_env}; }
+    std::span<const EnvVar> ProxyEnv() const { return std::span{proxy_env}; }
+    std::span<const EnvVar> ArchiverEnv() const { return std::span{archiver_env}; }
 
     /**
      * @return The value of the cluster backend arguments.
@@ -329,7 +429,7 @@ public:
     /**
      * @return Whether to run zeek-archiver.
      */
-    bool IsArchiverEnabled() const { return enable_archiver; }
+    bool IsArchiverEnabled() const { return archiver_option != "0"; }
 
     /**
      * @return Additional argument for the zeek-archiver.
@@ -345,18 +445,20 @@ public:
      */
     std::string ClusterLayoutCommand() const;
 
+    const std::string& ClusterAddress() const { return cluster_address; }
+    int ClusterPort() const { return cluster_port; }
+
+    const std::string& MetricsAddress() const { return cluster_address; }
+    int MetricsPort() const { return metrics_port; };
+
     /**
      * Generate a command string for the zeek-archiver.
+     *
+     * If the archiver option is 1, uses <zeek_base_dir>/bin/zeek-archiver
+     * and appends archiver_args and log queue and archive directories. Otherwise,
+     * uses the option as executable and appends archiver_args only.
      */
     std::string ArchiverCommand() const;
-
-    /**
-     * @return A new string with with all occurrences of ${var} in \a s replaced with values from \a vars.
-     */
-    static std::optional<std::string> SubstituteVars(const std::string& s,
-                                                     const std::map<std::string, std::string>& vars);
-
-    static void RunUnitTests();
 
 private:
     friend ZeekClusterConfig parse_config(const std::filesystem::path&, const std::filesystem::path&);
@@ -369,6 +471,14 @@ private:
     int proxies = 1;
 
     std::string args;
+    std::string manager_args;
+    std::string logger_args;
+    std::string proxy_args;
+
+    std::vector<EnvVar> env;
+    std::vector<EnvVar> manager_env;
+    std::vector<EnvVar> logger_env;
+    std::vector<EnvVar> proxy_env;
 
     std::string user = "zeek";
     std::string group = "zeek";
@@ -398,8 +508,8 @@ private:
     // Broker and ZeroMQ stuff
     std::string cluster_backend_args;
 
-    int port = 27760;
-    std::string address = "127.0.0.1";
+    int cluster_port = 27760;
+    std::string cluster_address = "127.0.0.1";
 
     // Metrics
     int metrics_port = 9991;
@@ -407,8 +517,9 @@ private:
 
     int restart_interval_sec = 1;
 
-    bool enable_archiver = true;
+    std::string archiver_option = "1"; // 1, 0 or path to a custom archiver command.
     std::string archiver_args;
+    std::vector<EnvVar> archiver_env;
 
     std::filesystem::path cluster_layout_generator;
 
@@ -422,4 +533,9 @@ private:
 };
 
 ZeekClusterConfig parse_config(const std::filesystem::path& zeek_base_dir, const std::filesystem::path& source_path);
+
+/**
+ * Get the hostname via gethostname(), returning nullopt on error.
+ */
+std::optional<std::string> gethostname();
 } // namespace zeek::detail

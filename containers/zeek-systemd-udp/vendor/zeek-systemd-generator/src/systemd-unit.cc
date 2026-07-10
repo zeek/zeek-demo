@@ -53,9 +53,15 @@ std::string Unit::ToString() const {
 
         if ( ! read_write_paths.empty() ) {
             ss << "ReadWritePaths=";
+            bool first = true;
             for ( const auto& rw : read_write_paths ) {
-                ss << rw.string() << " ";
+                if ( ! first )
+                    ss << " ";
+
+                first = false;
+                ss << rw.string();
             }
+
             ss << "\n";
         }
 

@@ -2,14 +2,19 @@
 
 #include "zeek-cluster-config.h"
 
+#include <unistd.h>
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
+#include <climits>
+#include <cstring>
 #include <fstream>
 #include <iterator>
 #include <optional>
 #include <regex>
 #include <set>
 #include <stdexcept>
+#include <string> // strerror
 #include <string>
 #include <string_view>
 #include <vector>
@@ -18,6 +23,7 @@ namespace {
 
 using zeek::detail::Option;
 using zeek::detail::Section;
+using zeek::detail::split;
 
 void ltrim(std::string& s) {
     s.erase(s.begin(), std::ranges::find_if(s.begin(), s.end(), [](unsigned char ch) { return ! std::isspace(ch); }));
@@ -37,9 +43,80 @@ void tolower(std::string& s) {
     std::ranges::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::tolower(c); });
 }
 
-/**
- * Split \a v by \a delim into a vector of string views.
- */
+bool validate_bool(const Option& opt) {
+    auto val = opt.Value();
+    tolower(val);
+
+    if ( val == "1" || val == "true" )
+        return true;
+    else if ( val == "0" || val == "false" )
+        return false;
+
+    fprintf(stderr, "invalid bool: %s for %s", opt.Value().c_str(), opt.Key().c_str());
+    std::exit(1);
+}
+
+std::string validate_memory_max(const Option& opt) {
+    auto val = opt.Value();
+    if ( val.empty() )
+        return "";
+
+    auto c = val[val.size() - 1];
+
+    if ( ! std::isdigit(c) ) {
+        if ( c != 'K' && c != 'M' && c != 'G' && c != 'T' ) {
+            std::fprintf(stderr, "invalid memory max: %s for %s\n", opt.Value().c_str(), opt.Key().c_str());
+            std::exit(1);
+        }
+
+        val = val.substr(0, val.size() - 1);
+    }
+
+    if ( ! std::ranges::all_of(val.begin(), val.end(), [](auto c) { return std::isdigit(c); }) ) {
+        std::fprintf(stderr, "invalid memory max: '%s' for %s\n", opt.Value().c_str(), opt.Key().c_str());
+        std::exit(1);
+    }
+
+    return opt.Value();
+}
+
+std::optional<int> parse_int(std::string_view sv) {
+    if ( sv.size() == 0 )
+        return {};
+
+    // Copy to a string instance.
+    std::string s = {sv.data(), sv.size()};
+
+    char* endptr = nullptr;
+    int result = std::strtol(s.c_str(), &endptr, 10);
+
+    if ( endptr != &s[s.size()] ) // was the whole string valid?
+        return {};
+
+    return result;
+}
+
+int validate_nice(const Option& opt) {
+    std::string val = opt.Value();
+    trim(val);
+
+    if ( val.empty() )
+        return 0;
+
+    auto nice = parse_int(val);
+    if ( ! nice.has_value() || *nice < -20 || *nice > 19 ) {
+        std::fprintf(stderr, "invalid nice value: %s for %s\n", opt.Value().c_str(), opt.Key().c_str());
+        std::exit(1);
+    }
+
+    return *nice;
+};
+
+} // namespace
+
+namespace zeek::detail {
+
+// Split \a v by \a delim into a vector of string views.
 std::vector<std::string_view> split(std::string_view v, char delim) {
     std::vector<std::string_view> result;
     size_t pos = 0;
@@ -57,6 +134,20 @@ std::vector<std::string_view> split(std::string_view v, char delim) {
         if ( pos >= v.size() )
             result.emplace_back(v.substr(pos, 0));
     } while ( pos < v.size() );
+
+    return result;
+}
+
+// " ".join(...) in C++, meh.
+std::string join(std::span<const std::string> args, const std::string& sep) {
+    std::string result;
+
+    for ( const auto& arg : args ) {
+        if ( ! result.empty() && ! sep.empty() && ! arg.empty() )
+            result += sep;
+
+        result += arg;
+    }
 
     return result;
 }
@@ -172,98 +263,9 @@ std::pair<std::vector<Section>, std::vector<std::string>> parse_ini_like(const s
     return {sections, errors};
 }
 
-/**
- * " ".join(...) in C++, meh.
- */
-std::string join(const std::vector<std::string>& args, const std::string& sep = " ") {
-    std::string result;
-
-    for ( const auto& arg : args ) {
-        if ( ! result.empty() && ! sep.empty() )
-            result += sep;
-
-        result += arg;
-    }
-
-    return result;
-}
-
-bool validate_bool(const Option& opt) {
-    auto val = opt.Value();
-    tolower(val);
-
-    if ( val == "1" || val == "true" )
-        return true;
-    else if ( val == "0" || val == "false" )
-        return false;
-
-    fprintf(stderr, "invalid bool: %s for %s", opt.Value().c_str(), opt.Key().c_str());
-    std::exit(1);
-}
-
-std::string validate_memory_max(const Option& opt) {
-    auto val = opt.Value();
-    if ( val.empty() )
-        return "";
-
-    auto c = val[val.size() - 1];
-
-    if ( ! std::isdigit(c) ) {
-        if ( c != 'K' && c != 'M' && c != 'G' && c != 'T' ) {
-            std::fprintf(stderr, "invalid memory max: %s for %s\n", opt.Value().c_str(), opt.Key().c_str());
-            std::exit(1);
-        }
-
-        val = val.substr(0, val.size() - 1);
-    }
-
-    if ( ! std::ranges::all_of(val.begin(), val.end(), [](auto c) { return std::isdigit(c); }) ) {
-        std::fprintf(stderr, "invalid memory max: '%s' for %s\n", opt.Value().c_str(), opt.Key().c_str());
-        std::exit(1);
-    }
-
-    return opt.Value();
-}
-
-std::optional<int> parse_int(std::string_view sv) {
-    if ( sv.size() == 0 )
-        return {};
-
-    // Copy to a string instance.
-    std::string s = {sv.data(), sv.size()};
-
-    char* endptr = nullptr;
-    int result = std::strtol(s.c_str(), &endptr, 10);
-
-    if ( endptr != &s[s.size()] ) // was the whole string valid?
-        return {};
-
-    return result;
-}
-
-int validate_nice(const Option& opt) {
-    std::string val = opt.Value();
-    trim(val);
-
-    if ( val.empty() )
-        return 0;
-
-    auto nice = parse_int(val);
-    if ( ! nice.has_value() || *nice < -20 || *nice > 19 ) {
-        std::fprintf(stderr, "invalid nice value: %s for %s\n", opt.Value().c_str(), opt.Key().c_str());
-        std::exit(1);
-    }
-
-    return *nice;
-};
-
-} // namespace
-
-namespace zeek::detail {
 
 // Grumble. Feels like wrong to implement this by hand.
-std::optional<std::string> ZeekClusterConfig::SubstituteVars(const std::string& s,
-                                                             const std::map<std::string, std::string>& vars) {
+std::optional<std::string> substitute_vars(const std::string& s, const std::map<std::string, std::string>& vars) {
     std::size_t pos = 0;
     std::string result;
 
@@ -311,9 +313,15 @@ std::optional<std::string> ZeekClusterConfig::SubstituteVars(const std::string& 
     return result;
 }
 
+
 // More grumble.
 CpuList::CpuList(const std::string& list) {
-    using std::operator""sv;
+    // Split gives us a single empty entry for an empty list,
+    // just handle that here upfront.
+    if ( list.empty() ) {
+        is_valid = true;
+        return;
+    }
 
     auto number_or_range_parts = split(list, ',');
 
@@ -368,7 +376,7 @@ CpuList::CpuList(const std::string& list) {
             cpus.push_back(*n);
         }
         else {
-            is_valid = false;
+            is_valid = list.empty(); // no parts and empty input: valid.
             return;
         }
     }
@@ -399,10 +407,10 @@ std::pair<InterfaceWorkerConfig, std::string> zeek::detail::InterfaceWorkerConfi
         std::string key = option.Key();
         tolower(key);
 
-        // Only worker_env support multi-value
-        if ( key != "worker_env" && option.Values().size() > 1 )
-            return {iwc, "multiple values for '" + key + "' given"};
+        // Only env and args options support multiple values.
 
+        if ( ! key.ends_with("env") && ! key.ends_with("args") && option.Values().size() > 1 )
+            return {iwc, "multiple values for '" + key + "' given"};
 
         // When the next interface option is reached, stop interpreting any keys.
         if ( key == "interface" ) {
@@ -417,23 +425,14 @@ std::pair<InterfaceWorkerConfig, std::string> zeek::detail::InterfaceWorkerConfi
             }
         }
         else if ( key == "worker_args" ) {
-            iwc.args = option.Value();
+            iwc.args = option.JoinedValues();
         }
         else if ( key == "worker_env" ) {
-            // Split all worker_env lines into key-value pairs and store
-            // them in env.
-            for ( const auto& value : option.Values() ) {
-                if ( value.empty() )
-                    continue;
+            auto [env, error] = option.AsEnvVars();
+            if ( ! error.empty() )
+                return {iwc, "error in worker_env: " + error};
 
-                auto idx = value.find('=');
-                if ( idx == std::string::npos )
-                    return {iwc, "missing equals in worker_env '" + key + "' = '" + value + "'"};
-
-                std::string k = value.substr(0, idx);
-                std::string v = value.substr(idx + 1);
-                iwc.envs.push_back({std::move(k), std::move(v)});
-            }
+            iwc.env = std::move(env);
         }
         else if ( key == "workers_cpu_list" ) {
             iwc.cpu_list = CpuList(option.Value());
@@ -579,7 +578,44 @@ ZeekClusterConfig parse_config(const std::filesystem::path& default_zeek_base_di
         tolower(key);
 
         if ( key == "args" ) {
-            config.args = option.Value();
+            config.args = option.JoinedValues();
+        }
+        else if ( key == "manager_args" ) {
+            config.manager_args = option.JoinedValues();
+        }
+        else if ( key == "logger_args" ) {
+            config.logger_args = option.JoinedValues();
+        }
+        else if ( key == "proxy_args" ) {
+            config.proxy_args = option.JoinedValues();
+        }
+        else if ( key == "env" ) {
+            auto [env, error] = option.AsEnvVars();
+            if ( error.empty() )
+                config.env = std::move(env);
+            else
+                config.Error("error in env: " + error);
+        }
+        else if ( key == "manager_env" ) {
+            auto [env, error] = option.AsEnvVars();
+            if ( error.empty() )
+                config.manager_env = std::move(env);
+            else
+                config.Error("error in manager_env: " + error);
+        }
+        else if ( key == "logger_env" ) {
+            auto [env, error] = option.AsEnvVars();
+            if ( error.empty() )
+                config.logger_env = std::move(env);
+            else
+                config.Error("error in logger_env: " + error);
+        }
+        else if ( key == "proxy_env" ) {
+            auto [env, error] = option.AsEnvVars();
+            if ( error.empty() )
+                config.proxy_env = std::move(env);
+            else
+                config.Error("error in proxy_env: " + error);
         }
         else if ( key == "user" ) {
             config.user = option.Value();
@@ -623,7 +659,7 @@ ZeekClusterConfig parse_config(const std::filesystem::path& default_zeek_base_di
             config.ext_zeek_path = option.Value();
         }
         else if ( key == "cluster_backend_args" ) {
-            config.cluster_backend_args = option.Value();
+            config.cluster_backend_args = option.JoinedValues();
         }
         else if ( key == "cluster_layout" ) {
             config.cluster_layout = option.Value();
@@ -631,11 +667,11 @@ ZeekClusterConfig parse_config(const std::filesystem::path& default_zeek_base_di
         else if ( key == "cluster_node_prefix" ) {
             config.cluster_node_prefix = option.Value();
         }
-        else if ( key == "port" ) {
-            config.port = std::atoi(option.Value().c_str());
+        else if ( key == "port" || key == "cluster_port" ) {
+            config.cluster_port = std::atoi(option.Value().c_str());
         }
-        else if ( key == "address" ) {
-            config.address = option.Value();
+        else if ( key == "address" || key == "cluster_address" ) {
+            config.cluster_address = option.Value();
         }
         else if ( key == "metrics_port" ) {
             config.metrics_port = std::atoi(option.Value().c_str());
@@ -644,10 +680,17 @@ ZeekClusterConfig parse_config(const std::filesystem::path& default_zeek_base_di
             config.metrics_address = option.Value();
         }
         else if ( key == "archiver" ) {
-            config.enable_archiver = validate_bool(option);
+            config.archiver_option = option.Value();
         }
         else if ( key == "archiver_args" ) {
-            config.archiver_args = option.Value();
+            config.archiver_args = option.JoinedValues();
+        }
+        else if ( key == "archiver_env" ) {
+            auto [env, error] = option.AsEnvVars();
+            if ( error.empty() )
+                config.archiver_env = std::move(env);
+            else
+                config.Error("error in proxy_env: " + error);
         }
         else if ( key == "manager_nice" ) {
             config.nice_manager = validate_nice(option);
@@ -684,6 +727,11 @@ ZeekClusterConfig parse_config(const std::filesystem::path& default_zeek_base_di
     if ( config.cluster_backend_args.empty() )
         config.cluster_backend_args = "frameworks/cluster/backend/zeromq";
 
+    // If this is a cluster configuration, but no explicit cluster_node_prefix set,
+    // use the hostname from the config file.
+    if ( config.IsInClusterDir() && ! config.cluster_node_prefix.has_value() )
+        config.cluster_node_prefix = config.SourcePath().stem().stem();
+
     // Default to local if args is empty - not sure if this is so clever.
     if ( config.args.empty() )
         config.args = "local";
@@ -691,11 +739,23 @@ ZeekClusterConfig parse_config(const std::filesystem::path& default_zeek_base_di
     // Assume zeek-cluster-layout-generator is in /bin
     config.cluster_layout_generator = config.ZeekBaseDir() / "bin" / "zeek-cluster-layout-generator";
 
-    // If the manager is disabled, require an explicit cluster_layout configuration for now.
-    if ( ! config.manager && ! config.cluster_layout.has_value() )
-        config.Error("disabled manager requires cluster_layout");
-
     return config;
+}
+
+bool ZeekClusterConfig::IsInClusterDir() const {
+    // Example: xxx/cluster/host.zeek.conf
+    auto ext1 = source_path.extension();
+    auto ext2 = source_path.stem().extension();
+    auto parent = source_path.parent_path().filename();
+    return parent == "cluster" && ext1 == ".conf" && ext2 == ".zeek";
+}
+
+std::filesystem::path ZeekClusterConfig::ClusterDir() const {
+    // Just some sanity checking.
+    if ( ! IsInClusterDir() )
+        throw std::logic_error("Do not call ClusterDir() for non-cluster config");
+
+    return source_path.parent_path();
 }
 
 std::string ZeekClusterConfig::ClusterLayoutCommand() const {
@@ -706,6 +766,21 @@ std::string ZeekClusterConfig::ClusterLayoutCommand() const {
             "cp",
             "-f",
             cluster_layout->string(),
+            (GeneratedScriptsDir() / "cluster-layout.zeek").string(),
+        };
+
+        return join(cmd_args);
+    }
+
+    // If this configuration is coming from /etc/zeek/cluster, use
+    // the zeek-cluster-layout-generator executable's -C argument to
+    // pass the directory.
+    if ( IsInClusterDir() ) {
+        std::vector<std::string> cmd_args = {
+            cluster_layout_generator.string(),
+            "-C",
+            ClusterDir(),
+            "-o",
             (GeneratedScriptsDir() / "cluster-layout.zeek").string(),
         };
 
@@ -744,9 +819,9 @@ std::string ZeekClusterConfig::ClusterLayoutCommand() const {
         "-W",
         worker_arg,
         "-p",
-        std::to_string(port),
+        std::to_string(cluster_port),
         "-a",
-        address,
+        cluster_address,
         "-m",
         std::to_string(metrics_port),
         "-b",
@@ -759,13 +834,26 @@ std::string ZeekClusterConfig::ClusterLayoutCommand() const {
 }
 
 std::string ZeekClusterConfig::ArchiverCommand() const {
-    std::filesystem::path archiver_exe = ZeekBaseDir() / "bin" / "zeek-archiver";
-    std::vector<std::string> cmd_args = {
-        archiver_exe.string(),
-        ArchiverArgs(),
-        LogQueueDir().string(),
-        LogArchiveDir().string(),
-    };
+    if ( archiver_option == "0" )
+        throw std::logic_error("ArchiverCommand() called but archiver_option is 0");
+
+    std::vector<std::string> cmd_args;
+
+    if ( archiver_option == "1" ) {
+        std::filesystem::path archiver_exe = ZeekBaseDir() / "bin" / "zeek-archiver";
+        cmd_args = {
+            archiver_exe.string(),
+            ArchiverArgs(),
+            LogQueueDir().string(),
+            LogArchiveDir().string(),
+        };
+    }
+    else {
+        cmd_args = {
+            archiver_option,
+            ArchiverArgs(),
+        };
+    }
 
     return join(cmd_args);
 }
@@ -831,136 +919,15 @@ const std::string& ZeekClusterConfig::MemoryMaxFor(const std::string& node) cons
     abort();
 }
 
-/**
- * Really just testing for the SubstituteVars() function.
- */
-void ZeekClusterConfig::RunUnitTests() {
-    int errors = 0;
+std::optional<std::string> gethostname() {
+    char buf[HOST_NAME_MAX];
 
-    auto test_split = [&errors](std::string s, char delim, std::vector<std::string_view> expected) {
-        auto result = split(s, delim);
+    if ( ::gethostname(buf, sizeof(buf)) < 0 ) {
+        std::fprintf(stderr, "failed gethostname: %s", ::strerror(errno));
+        return std::nullopt;
+    }
 
-        if ( result != expected ) {
-            std::fprintf(stderr, "FAIL: %s\n", s.c_str());
-            std::fprintf(stderr, " result  ");
-            for ( const auto& r : result )
-                fprintf(stderr, " %s", std::string(r.data(), r.size()).c_str());
-            fprintf(stderr, "\n");
-
-            std::fprintf(stderr, " expected");
-            for ( const auto& r : expected )
-                fprintf(stderr, " %s", std::string(r.data(), r.size()).c_str());
-            fprintf(stderr, "\n");
-            ++errors;
-        }
-    };
-
-    test_split("", ',', {""});
-    test_split(",", ',', {"", ""});
-    test_split("1,", ',', {"1", ""});
-    test_split("1,2", ',', {"1", "2"});
-    test_split("9,10-12:1,18-24:2", ',', {"9", "10-12:1", "18-24:2"});
-    test_split("9:10", ':', {"9", "10"});
-    test_split("9::10", ':', {"9", "", "10"});
-
-    auto test_replace_vars = [&errors](std::string s, std::map<std::string, std::string> vars,
-                                       std::optional<std::string> expected) {
-        // std::fprintf(stderr, "=== run %s\n", s.c_str());
-        auto result = ZeekClusterConfig::SubstituteVars(s, vars);
-
-        if ( ! expected.has_value() ) {
-            if ( result.has_value() ) {
-                std::fprintf(stderr, "FAIL: expected error, but got result '%s'\n", result->c_str());
-                ++errors;
-            }
-        }
-        else {
-            if ( ! result.has_value() ) {
-                ++errors;
-                std::fprintf(stderr, "FAIL: expected '%s' from '%s' but got error\n", expected.value().c_str(),
-                             s.c_str());
-            }
-            else if ( result != expected ) {
-                ++errors;
-                std::fprintf(stderr, "FAIL: '%s', got '%s'\n", expected.value().c_str(), result.value().c_str());
-            }
-        }
-    };
-
-    test_replace_vars("af_packet::eth0", {{"b", "XXX"}}, "af_packet::eth0");
-    test_replace_vars("\\${a}", {{"a", "XXX"}}, "${a}");
-    test_replace_vars("${a}", {{"a", "AAA"}}, "AAA");
-    test_replace_vars("a\\${b}", {{"b", "XXX"}}, "a${b}");
-    test_replace_vars("a\\${b}c", {{"b", "XXX"}}, "a${b}c");
-    test_replace_vars("a\\${b}\\c", {{"b", "XXX"}}, "a${b}\\c");
-    test_replace_vars("a${b}", {{"b", "BBB"}}, "aBBB");
-    test_replace_vars("a${b}${c}", {{"b", "BBB"}, {"c", "CCC"}}, "aBBBCCC");
-    test_replace_vars("a${b}x${c}y", {{"b", "BBB"}, {"c", "CCC"}}, "aBBBxCCCy");
-
-
-    auto test_parse_cpu = [&errors](std::string s, std::optional<std::vector<int>> expected = {}) {
-        auto result = CpuList(s);
-
-        if ( ! expected.has_value() ) {
-            if ( result.IsValid() ) {
-                fprintf(stderr, "FAIL: Expected failure but result valid for '%s'\n", s.c_str());
-                ++errors;
-                return;
-            }
-            return; // Expected failure and got it.
-        }
-
-        if ( result.Indices() != *expected ) {
-            std::fprintf(stderr, "FAIL: indices wrong for '%s'\n", s.c_str());
-            std::fprintf(stderr, " result  ");
-            for ( const auto& r : result.Indices() )
-                fprintf(stderr, " %d", r);
-            fprintf(stderr, "\n");
-
-            std::fprintf(stderr, " expected");
-            for ( const auto& r : *expected )
-                fprintf(stderr, " %d", r);
-            fprintf(stderr, "\n");
-
-            ++errors;
-        }
-    };
-
-    test_parse_cpu("a");
-    test_parse_cpu(",");
-    test_parse_cpu("-");
-    test_parse_cpu(":");
-    test_parse_cpu("1,");
-    test_parse_cpu("1,,2");
-    test_parse_cpu(",2");
-    test_parse_cpu("-2");
-    test_parse_cpu("2-");
-    test_parse_cpu("2-3-");
-    test_parse_cpu("1,2-");
-    test_parse_cpu("3-2");
-    test_parse_cpu("1-2,3-2");
-    test_parse_cpu("1-2:");
-    test_parse_cpu("1-2:0");
-    test_parse_cpu("1-2:-2");
-    test_parse_cpu("1:");
-    test_parse_cpu("1:0");
-    test_parse_cpu("1:1");
-    test_parse_cpu("1-2:1:2");
-    test_parse_cpu("1-2:1:");
-    test_parse_cpu("1-2::1::");
-    test_parse_cpu("1-2:1::");
-
-    test_parse_cpu("", std::vector<int>{});
-    test_parse_cpu("1", {{1}});
-    test_parse_cpu("3,2,2,4", {{3, 2, 2, 4}});
-    test_parse_cpu("1-4", {{1, 2, 3, 4}});
-    test_parse_cpu("1,3-5", {{1, 3, 4, 5}});
-    test_parse_cpu("1-5:2", {{1, 3, 5}});
-    test_parse_cpu("9,10-12:1,18-24:2,19-22:3", {{9, 10, 11, 12, 18, 20, 22, 24, 19, 22}});
-    test_parse_cpu("0-8:2,10-20:3", {{0, 2, 4, 6, 8, 10, 13, 16, 19}});
-
-    if ( errors > 0 )
-        std::exit(1);
+    return buf;
 }
 
 } // namespace zeek::detail

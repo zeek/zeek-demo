@@ -8,6 +8,8 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
     build-essential \
     cmake \
     g++ \
+    curl \
+    ca-certificates \
     git \
     gperf \
     libblkid-dev \
@@ -24,17 +26,19 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
-COPY vendor/zeek-systemd-generator ./zeek-systemd-generator
-WORKDIR /src/zeek-systemd-generator/build
-RUN rm -rf ./* && cmake ../ && make -j
 
-WORKDIR /src
-COPY ./vendor/systemd ./systemd
-WORKDIR /src/systemd
+# Fetch and build a stripped down systemd version as we only want to supervise
+# Zeek in a container, not run a fully fledged system.
+ENV SYSTEMD_SHA256=f9b9da1103d1714703503d1746971ccbeeae945663ef3ede3b7348169b5df064
+ENV SYSTEMD_VERSION=261.1
+ENV SYSTEMD_URL=https://github.com/systemd/systemd/archive/refs/tags/v${SYSTEMD_VERSION}.tar.gz
 
-# Build a stripped down systemd as we only want to supervise Zeek
-# in a container, not run a fully fledged system.
-RUN rm -rf build && meson setup ./build \
+# hadolint ignore=DL3003,DL4006
+RUN curl -m 30 -fL ${SYSTEMD_URL} -o systemd-${SYSTEMD_VERSION}.tar.gz \
+  && echo "${SYSTEMD_SHA256}" "systemd-${SYSTEMD_VERSION}.tar.gz" | sha256sum --check \
+  && tar xf systemd-${SYSTEMD_VERSION}.tar.gz \
+  && cd systemd-${SYSTEMD_VERSION} \
+  && meson setup ./build \
     -Dmode=release \
     -Dapparmor=disabled \
     -Dbacklight=false \
@@ -89,6 +93,11 @@ RUN rm -rf build && meson setup ./build \
   && ninja -C build \
   && DESTDIR=/tmp/install/systemd ninja -C build install \
   && du -h --max-depth=4 /tmp/install
+
+WORKDIR /src
+COPY vendor/zeek-systemd-generator ./zeek-systemd-generator
+WORKDIR /src/zeek-systemd-generator/build
+RUN rm -rf ./* && cmake ../ && make -j
 
 #
 # Runtime stage
@@ -198,7 +207,8 @@ COPY etc/systemd/system/promtail.service .
 WORKDIR /etc/systemd/system-environment-generators
 COPY etc/systemd/system-environment-generators/10-container-env.sh .
 
-# Create a fkae /etc/machine-id to avoid creating one or using container_uuid
+# Create a fake /etc/machine-id to avoid systemd bind-mounting the value
+# from container_uuid over it as that a permission denied error.
 RUN echo "00000000000000000000000000000001" > /etc/machine-id
 
 # Install the vendored zeek-systemd-generator version
