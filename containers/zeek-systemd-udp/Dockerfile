@@ -53,6 +53,7 @@ RUN curl -m 30 -fL ${SYSTEMD_URL} -o systemd-${SYSTEMD_VERSION}.tar.gz \
     -Dinitrd=false \
     -Dkernel-install=false \
     -Dlocaled=false \
+    -Dlogind=false \
     -Dmachined=false \
     -Dnetworkd=false \
     -Dnspawn=disabled \
@@ -62,6 +63,7 @@ RUN curl -m 30 -fL ${SYSTEMD_URL} -o systemd-${SYSTEMD_VERSION}.tar.gz \
     -Dnss-resolve=false \
     -Dnss-systemd=false \
     -Doss-fuzz=false \
+    -Doomd=false \
     -Dpolkit=disabled \
     -Ddbus=false \
     -Dbootloader=false \
@@ -70,6 +72,7 @@ RUN curl -m 30 -fL ${SYSTEMD_URL} -o systemd-${SYSTEMD_VERSION}.tar.gz \
     -Dquotacheck=false \
     -Dremote=disabled \
     -Dresolve=false \
+    -Drfkill=false \
     -Dselinux=disabled \
     -Dslow-tests=false \
     -Dsmack=false \
@@ -92,7 +95,7 @@ RUN curl -m 30 -fL ${SYSTEMD_URL} -o systemd-${SYSTEMD_VERSION}.tar.gz \
     -Dntp-servers="" \
   && ninja -C build \
   && DESTDIR=/tmp/install/systemd ninja -C build install \
-  && du -h --max-depth=4 /tmp/install
+  && du -h --max-depth=6 /tmp/install
 
 WORKDIR /src
 COPY vendor/zeek-systemd-generator ./zeek-systemd-generator
