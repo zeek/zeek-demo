@@ -2,9 +2,9 @@
 
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
-#include "zeek-cluster-config.h"
+#include "utils.h"
 
-TEST_SUITE("zeek-cluster-config helpers") {
+TEST_SUITE("utils helpers") {
     TEST_CASE("split") {
         using zeek::detail::split;
         using ssv = std::vector<std::string_view>;
@@ -80,6 +80,25 @@ TEST_SUITE("zeek-cluster-config helpers") {
             auto cl8 = zeek::detail::CpuList("0-8:2,10-20:3");
             REQUIRE(cl8.IsValid());
             CHECK_EQ(cl8.Indices(), iv{0, 2, 4, 6, 8, 10, 13, 16, 19});
+        }
+
+        SUBCASE("indices set") {
+            using iv = std::vector<int>;
+
+            auto cl1 = zeek::detail::CpuList("0-3,0-3");
+            REQUIRE(cl1.IsValid());
+            CHECK_EQ(cl1.Indices(), iv{0, 1, 2, 3, 0, 1, 2, 3});
+            CHECK_EQ(cl1.IndicesSetString(), "0,1,2,3");
+
+            auto cl2 = zeek::detail::CpuList("3,2,1,0");
+            REQUIRE(cl2.IsValid());
+            CHECK_EQ(cl2.Indices(), iv{3, 2, 1, 0});
+            CHECK_EQ(cl2.IndicesSetString(), "0,1,2,3");
+
+            auto cl3 = zeek::detail::CpuList("3,2,1,0");
+            REQUIRE(cl3.IsValid());
+            CHECK_EQ(cl3.Indices(), iv{3, 2, 1, 0});
+            CHECK_EQ(cl3.IndicesSetString(" "), "0 1 2 3");
         }
     }
 }

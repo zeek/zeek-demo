@@ -31,7 +31,7 @@ public:
      * TODO: If this is a drop-in file, it should be the parent's directory
      *       name with the .d stripped from the name.
      */
-    std::string Name() { return file.filename().string(); }
+    std::string Name() const { return file.filename().string(); }
 
     /**
      * Render the unit as a string that can be written to a unit file.

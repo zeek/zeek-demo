@@ -7,7 +7,11 @@
 #include <sstream>
 #include <string>
 
+#include "utils.h"
+
 namespace zeek::detail::systemd {
+
+using zeek::detail::join;
 
 Unit::Unit(std::filesystem::path file, std::string description, std::filesystem::path source_path)
     : file(std::move(file)), description(std::move(description)), source_path(std::move(source_path)) {}
@@ -39,8 +43,8 @@ std::string Unit::ToString() const {
     if ( start_limit_burst.has_value() )
         ss << "StartLimitBurst=" << start_limit_burst.value() << "\n";
 
-    // Make the [Service] section depending on availability of ExecStar or
-    // ExecStartPre for now.
+    // Create the [Service] section depending the existence of
+    // any ExecStart or ExecStartPre lines.
     if ( exec_start.size() > 0 || exec_start_pre.size() > 0 ) {
         ss << "\n";
         ss << "[Service]" << "\n";
@@ -51,19 +55,8 @@ std::string Unit::ToString() const {
         ss << "Group=" << group << "\n";
         ss << "WorkingDirectory=" << working_directory.string() << "\n";
 
-        if ( ! read_write_paths.empty() ) {
-            ss << "ReadWritePaths=";
-            bool first = true;
-            for ( const auto& rw : read_write_paths ) {
-                if ( ! first )
-                    ss << " ";
-
-                first = false;
-                ss << rw.string();
-            }
-
-            ss << "\n";
-        }
+        if ( ! read_write_paths.empty() )
+            ss << "ReadWritePaths=" << join(read_write_paths, " ") << "\n";
 
         if ( cpu_affinity.has_value() )
             ss << "CPUAffinity=" << *cpu_affinity << "\n";
@@ -81,7 +74,7 @@ std::string Unit::ToString() const {
             ss << "AmbientCapabilities=" << ambient_capabilities.value() << "\n";
 
         if ( numa_policy.has_value() )
-            ss << "NUMAPolicy=" + numa_policy.value() << "\n";
+            ss << "NUMAPolicy=" << numa_policy.value() << "\n";
 
         for ( const auto& [name, value] : env )
             ss << "Environment=" << name << "=" << value << "\n";
@@ -113,6 +106,7 @@ std::string Unit::ToString() const {
 
     return ss.str();
 }
+
 bool Unit::Write() const {
     if ( std::ofstream ofs(file, std::ios::trunc); ofs ) {
         ofs << ToString();

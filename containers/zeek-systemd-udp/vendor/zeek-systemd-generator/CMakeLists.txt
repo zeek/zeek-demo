@@ -30,14 +30,16 @@ option(ENABLE_ZEEK_SYSTEMD_GENERATOR "Enable building and installing zeek-system
        ${_default})
 if (ENABLE_ZEEK_SYSTEMD_GENERATOR)
 
-    # Separate supporting libraries that aren't systemd specific.
-    add_library(systemd-generator OBJECT src/systemd-unit.cc)
+    # Separate supporting libraries in preparation for if there's
+    # ever a non-systemd generator split out from this.
+    add_library(utils OBJECT src/utils.cc)
+    add_library(systemd-unit OBJECT src/systemd-unit.cc)
     add_library(zeek-cluster-config OBJECT src/zeek-cluster-config.cc)
 
     if (DOCTEST_INCLUDE_DIR)
-        add_executable(zeek-cluster-config-test src/zeek-cluster-config-test.cc)
-        target_include_directories(zeek-cluster-config-test PRIVATE ${DOCTEST_INCLUDE_DIR})
-        target_link_libraries(zeek-cluster-config-test zeek-cluster-config)
+        add_executable(utils-test src/utils-test.cc)
+        target_include_directories(utils-test PRIVATE ${DOCTEST_INCLUDE_DIR})
+        target_link_libraries(utils-test utils)
     endif ()
 
     add_executable(zeek-systemd-generator src/zeek-systemd-generator.cc)
@@ -45,10 +47,10 @@ if (ENABLE_ZEEK_SYSTEMD_GENERATOR)
         zeek-systemd-generator PRIVATE DEFAULT_ETC_DIR=\"${_default_etc_dir}\"
                                        DEFAULT_BASE_DIR=\"${_default_base_dir}\")
 
-    target_link_libraries(zeek-systemd-generator systemd-generator zeek-cluster-config)
+    target_link_libraries(zeek-systemd-generator zeek-cluster-config systemd-unit utils)
 
     add_executable(zeek-cluster-layout-generator src/zeek-cluster-layout-generator.cc)
-    target_link_libraries(zeek-cluster-layout-generator zeek-cluster-config)
+    target_link_libraries(zeek-cluster-layout-generator zeek-cluster-config utils)
 
     install(TARGETS zeek-systemd-generator RUNTIME DESTINATION bin)
     install(TARGETS zeek-cluster-layout-generator RUNTIME DESTINATION bin)

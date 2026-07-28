@@ -200,6 +200,12 @@ WORKDIR /usr/local/zeek/share/zeek/site
 RUN mv local.zeek local.zeek.orig
 COPY local.zeek .
 
+WORKDIR /usr/local/zeek/share/zeek/site
+
+WORKDIR /usr/local/zeek/share/zeek/policy/misc
+COPY vendor/zeromq-multi-host-auto-setup.zeek .
+
+
 WORKDIR /etc/systemd/system
 RUN mv promtail.service promtail.service.orig
 COPY etc/systemd/system/promtail.service .
